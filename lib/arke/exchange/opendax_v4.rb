@@ -309,10 +309,10 @@ module Arke::Exchange
     end
 
     def fetch_openorders(market)
-      # Request [1, 42, "list_orders", ["btcusdt", 0, 0, "wait"]]
+      # Request [1, 42, "list_orders", ["btcusdt", 0, 0, ["wait"]]]
       rid = reqid()
       respond_to(rid, Fiber.current)
-      order_params = [market.downcase, 0, 0, "wait"]
+      order_params = [market.downcase, 0, 0, ["wait"]]
       ws_write_message(:private, JSON.dump([MSG_TYPE_REQUEST, rid, METHOD_LIST_ORDERS, order_params]))
       Fiber.yield
     end

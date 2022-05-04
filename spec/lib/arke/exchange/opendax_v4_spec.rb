@@ -92,7 +92,7 @@ describe Arke::Exchange::OpendaxV4 do
         port = ws_server do |socket, msg|
           logger.info "ws server received: #{msg}"
           case msg
-          when '[1,1,"list_orders",["btcusd",0,0,"wait"]]'
+          when '[1,1,"list_orders",["btcusd",0,0,["wait"]]]'
             socket.send '[2,1,"list_orders",[["btcusd",97,"6dcc2c8e-c295-11ea-b7ad-1831bf9834b0","sell","w","l","9120","0","0.25","0.25","0",0,1594386563,"0.25","0.25"]]]'
           else
             raise "unexpected message: #{msg}"
