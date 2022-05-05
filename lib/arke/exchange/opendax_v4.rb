@@ -19,6 +19,8 @@ module Arke::Exchange
     EVENT_ORDERBOOK_INCREMENT = "obi"
     EVENT_ORDERBOOK_SNAPSHOT  = "obs"
     EVENT_SYSTEM              = "sys"
+    EVENT_MARKETS             = "markets"
+    EVENT_CONFIG              = "config"
 
     METHOD_PING               = "ping"
     METHOD_SUBSCRIBE          = "subscribe"
@@ -33,14 +35,16 @@ module Arke::Exchange
 
     def initialize(config)
       super
+      raise "host or ws should be configured for opendax_v4 driver" if config["host"].to_s.empty? && config["ws"].to_s.empty?
+
       @ws_url = config["ws"] ||= "wss://%s/api/v1/finex/ws" % [URI.parse(config["host"]).hostname]
+      @go_true_url = config["go_true_url"] || "https://%s" % URI.parse(@ws_url).hostname
       @reqid = 0
       @req_ctx = {}
       @timeout = config["timeout"] || DEFAULT_TIMEOUT
       @markets = []
       @balances = nil
       @kong_key = config["kong_key"]
-      @go_true_url = config["go_true_url"]
       @verify_ssl = config["verify_ssl"].nil? ? true : config["verify_ssl"]
       apply_flags(WS_PRIVATE)
 
@@ -204,11 +208,20 @@ module Arke::Exchange
         create_or_update_orderbook(@books[market][:book], {"asks" => asks}) if asks && !asks.empty?
         @books[market][:sequence] = args[1]
 
-      when "markets"
-        @markets = args
-        f, = @req_ctx["markets"]
+      when EVENT_CONFIG
+        @config, = args
+        @kong_key = @config["goTrueAnon"]
+        f, = @req_ctx[EVENT_CONFIG]
         unless f.nil?
-          cleanup("markets")
+          cleanup(EVENT_CONFIG)
+          f.resume
+        end
+
+      when EVENT_MARKETS
+        @markets = args
+        f, = @req_ctx[EVENT_MARKETS]
+        unless f.nil?
+          cleanup(EVENT_MARKETS)
           f.resume
         end
       end
@@ -339,8 +352,11 @@ module Arke::Exchange
 
     def fetch_markets
       EM.synchrony do
-        respond_to("markets", Fiber.current)
+        respond_to(EVENT_MARKETS, Fiber.current)
+        respond_to(EVENT_CONFIG, Fiber.current)
         Fiber.new { ws_connect_public }.resume
+        # Wait for both "markets" and "config" messages to be received to disconnect
+        Fiber.yield
         Fiber.yield
         EM.stop
       end
