@@ -238,15 +238,17 @@ module Arke::Exchange
         # Event example [4,"bu",[["tok","1000","0"],["usdt","999.99998","0"],["btc","999.9998","0"],["eth","1000","0"],["local","1000","0"]]]
         logger.debug { "ACCOUNT:#{id} balance update received: #{args}" }
 
-        balances = args.map {|currency, total, locked|
-          free = total.to_d - locked.to_d
+        balances = args.map do |currency, free, locked|
+          free = free.to_d
+          locked = locked.to_d
+          total = free + locked
           {
             "currency" => currency,
             "free"     => free,
-            "locked"   => locked.to_d,
-            "total"    => total.to_d,
+            "locked"   => locked,
+            "total"    => total,
           }
-        }
+        end
         update_balances(balances)
 
         f, = @req_ctx["balances"]

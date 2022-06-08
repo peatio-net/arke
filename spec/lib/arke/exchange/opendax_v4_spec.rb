@@ -333,8 +333,8 @@ describe Arke::Exchange::OpendaxV4 do
     context "event balance update" do
       let(:balances_event) do
         [
-          ["btc", 0.998, 0.002],
-          ["eth", 1000000000, 0],
+          ["btc", "0.998", "0.002"],
+          ["eth", "1000000000", "0"],
         ]
       end
 
@@ -345,15 +345,15 @@ describe Arke::Exchange::OpendaxV4 do
           [
             {
               "currency" => "btc",
-              "free"     => 0.996,
-              "locked"   => 0.002,
-              "total"    => 0.998,
+              "free"     => "0.998".to_d,
+              "locked"   => "0.002".to_d,
+              "total"    => "1".to_d,
             },
             {
               "currency" => "eth",
-              "free"     => 1_000_000_000,
-              "locked"   => 0,
-              "total"    => 1_000_000_000,
+              "free"     => "1_000_000_000".to_d,
+              "locked"   => "0".to_d,
+              "total"    => "1_000_000_000".to_d,
             },
           ]
         )
