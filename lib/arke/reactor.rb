@@ -94,7 +94,9 @@ module Arke
         # Setup balance fetcher
         update_balances
         Fiber.new do
-          EM::Synchrony.add_periodic_timer(23) { update_balances }
+          # PMC captive account, so no need to worry about balance
+          #EM::Synchrony.add_periodic_timer(23) { update_balances }
+          EM::Synchrony.add_periodic_timer(10000) { update_balances }
         end.resume
 
         # Initialize executors & fx classes
