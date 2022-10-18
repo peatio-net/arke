@@ -12,8 +12,8 @@ describe Arke::Exchange::OpendaxV4 do
   let!(:default_opendax_v4) {
     Arke::Exchange::OpendaxV4.new(
       "ws"          => "ws://localhost:5050",
-      "key"         => "4576fdf6bde1fe670b17ee667d4da85ca3a4383219757a977dfa8cfe3b5c89ee",
-      "secret"      => "OwpadzSYOSkzweoJkjPrFeVgjOwOuxVHk8FXIlffdWw",
+      "key"         => "some_email@gmail.com",
+      "secret"      => "password",
       "go_true_url" => "http://localhost:9999"
     )
   }
@@ -21,8 +21,8 @@ describe Arke::Exchange::OpendaxV4 do
   def new_odax(port)
     Arke::Exchange::OpendaxV4.new(
       "ws"      => "ws://localhost:#{port}",
-      "key"     => "4576fdf6bde1fe670b17ee667d4da85ca3a4383219757a977dfa8cfe3b5c89ee",
-      "secret"  => "OwpadzSYOSkzweoJkjPrFeVgjOwOuxVHk8FXIlffdWw",
+      "key"     => "some_email@gmail.com",
+      "secret"  => "password",
       "timeout" => timeout
     )
   end
@@ -420,21 +420,6 @@ describe Arke::Exchange::OpendaxV4 do
     end
   end
 
-  context "private functions" do
-    context "generate signature" do
-      before do
-        default_opendax_v4.instance_variable_set(:@api_key, "8cc4fcb9a87bbe5733c2402c438c8397d6a23dc7f262e9d3abd9a57a990404c5")
-      end
-
-      it "should generate signature" do
-        hash = default_opendax_v4.send(:sign_eth_message, "ec041668-37aa-4497-94e6-892dcdb0ef24")
-        expect(Base64.encode64(hash)).to eq("a8hR2tLR7DOnE6mvFo4eHRvc5s1SOaKUKy6gAwTlBms=\n")
-        signature = default_opendax_v4.send(:generate_signature, hash)
-        expect(signature).to eq("0xb5d0fb6dcdc6ccfe2f1c93a06efba4242f5641c11bf36d3d8788af99c175d06600e82cfc6c03503bf71b9eb9fcb421b124b219a4969149e35e9a73cbafe457af1b")
-      end
-    end
-  end
-
   context "generate_jwt" do
     context "with error" do
       context "api_key doesnt exist" do
@@ -447,48 +432,18 @@ describe Arke::Exchange::OpendaxV4 do
         end
       end
 
-      context "sign_challange address is incorrect" do
+      context "invalid password" do
         before do
-          default_opendax_v4.instance_variable_set(:@api_key, "8cc4fcb9a87bbe5733c2402c438c8397d6a23dc7f262e9d3abd9a57a990404c5")
+          default_opendax_v4.instance_variable_set(:@api_key, "some_email@gmail.com")
         end
 
         before do
-          stub_request(:post, 'http://localhost:9999/api/v1/auth/sign_challenge')
+          stub_request(:post, 'http://localhost:9999/api/v1/auth/token?grant_type=password')
             .with(headers: {"apikey" => "", "Content-Type" => "application/json"},
-                  body: {"algorithm" => "ETH", "key" => "0xED29f5CAA68D7190fea29a84c6740dBF0FcFBd70"})
+                  body: {"email" => "some_email@gmail.com", "password" => "password"})
             .to_return(
               status:  422,
-              body: {code: 422, msg: "Invalid address"}.to_json,
-              headers: {}
-            )
-        end
-
-        it "should raise an error" do
-          expect {default_opendax_v4.generate_jwt}.to raise_error(RuntimeError)
-        end
-      end
-
-      context "invalid signature" do
-        before do
-          default_opendax_v4.instance_variable_set(:@api_key, "8cc4fcb9a87bbe5733c2402c438c8397d6a23dc7f262e9d3abd9a57a990404c5")
-        end
-
-        before do
-          stub_request(:post, 'http://localhost:9999/api/v1/auth/sign_challenge')
-            .with(headers: {"apikey" => "", "Content-Type" => "application/json"},
-                  body: {"algorithm" => "ETH", "key" => "0xED29f5CAA68D7190fea29a84c6740dBF0FcFBd70"})
-            .to_return(
-              status:  200,
-              body: { challenge_token: "ec041668-37aa-4497-94e6-892dcdb0ef24"}.to_json,
-              headers: {}
-            )
-
-          stub_request(:post, 'http://localhost:9999/api/v1/auth/asymmetric_login')
-            .with(headers: {"apikey" => "", "Content-Type" => "application/json"},
-                  body: {"key" => "0xED29f5CAA68D7190fea29a84c6740dBF0FcFBd70", "challenge_token_signature" => "0xb5d0fb6dcdc6ccfe2f1c93a06efba4242f5641c11bf36d3d8788af99c175d06600e82cfc6c03503bf71b9eb9fcb421b124b219a4969149e35e9a73cbafe457af1b"})
-            .to_return(
-              status:  422,
-              body: {code: 422, msg: "Signature verification failed:Provided signature does not match with Key"}.to_json,
+              body: {code: 422, msg: "Invalid login credentials"}.to_json,
               headers: {}
             )
         end
@@ -501,22 +456,13 @@ describe Arke::Exchange::OpendaxV4 do
 
     context "without error" do
       before do
-        default_opendax_v4.instance_variable_set(:@api_key, "8cc4fcb9a87bbe5733c2402c438c8397d6a23dc7f262e9d3abd9a57a990404c5")
+        default_opendax_v4.instance_variable_set(:@api_key, "some_email@gmail.com")
       end
 
       before do
-        stub_request(:post, 'http://localhost:9999/api/v1/auth/sign_challenge')
+        stub_request(:post, 'http://localhost:9999/api/v1/auth/token?grant_type=password')
           .with(headers: {"apikey" => "", "Content-Type" => "application/json"},
-                body: {"algorithm" => "ETH", "key" => "0xED29f5CAA68D7190fea29a84c6740dBF0FcFBd70"})
-          .to_return(
-            status:  200,
-            body: { challenge_token: "ec041668-37aa-4497-94e6-892dcdb0ef24"}.to_json,
-            headers: {}
-          )
-
-        stub_request(:post, 'http://localhost:9999/api/v1/auth/asymmetric_login')
-          .with(headers: {"apikey" => "", "Content-Type" => "application/json"},
-                body: {"key" => "0xED29f5CAA68D7190fea29a84c6740dBF0FcFBd70", "challenge_token_signature" => "0xb5d0fb6dcdc6ccfe2f1c93a06efba4242f5641c11bf36d3d8788af99c175d06600e82cfc6c03503bf71b9eb9fcb421b124b219a4969149e35e9a73cbafe457af1b"})
+                body: {"email" => "some_email@gmail.com", "password" => "password"})
           .to_return(
             status:  200,
             body: {access_token: "jwt_token"}.to_json,

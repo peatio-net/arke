@@ -387,17 +387,7 @@ module Arke::Exchange
     def generate_jwt
       raise "There is no api key" if @api_key.nil?
 
-      key = Eth::Key.new priv: @api_key
-      address = key.address
-
-      response = post("/api/v1/auth/sign_challenge", {algorithm: 'ETH', key: address})
-      raise response.body.to_s if response.status != 200
-
-      token = response.body['challenge_token']
-      hash = sign_eth_message(token)
-      signature = generate_signature(hash)
-
-      response = post("/api/v1/auth/asymmetric_login",{key: address, challenge_token_signature: signature})
+      response = post("/api/v1/auth/token?grant_type=password", {email: @api_key, password: @secret})
       raise response.body.to_s if response.status != 200
 
       response.body['access_token']
@@ -444,22 +434,6 @@ module Arke::Exchange
         "apikey"           => @kong_key,
         "Content-Type"     => "application/json",
       }
-    end
-
-    def generate_signature(hash)
-      private_key = Arke::Ethereum::PrivateKey.new(@api_key)
-
-      # Sigh hash with private key
-      v, r, s = Arke::Ethereum::Secp256k1.recoverable_sign(hash, private_key.encode(:bin))
-      # Form signature from R and S values
-      raw_sig = Arke::Ethereum::Utils.zpad_int(r) + Arke::Ethereum::Utils.zpad_int(s)
-
-      "0x" + raw_sig.unpack("H*")[0] + v.to_s(16)
-    end
-
-    def sign_eth_message(token)
-      message = "\x19Ethereum Signed Message:\n#{token.length}#{token}"
-      Arke::Ethereum::Utils.keccak256(message)
     end
   end
 end
