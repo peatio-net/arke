@@ -98,6 +98,9 @@ module Arke::Strategy
       order_buy = target.open_orders.get_by_id(:buy, trade.order_id)
       order_sell = target.open_orders.get_by_id(:sell, trade.order_id)
 
+      logger.debug {"Trade order ID: #{trade.order_id}"}
+      logger.debug {"order_buy: #{order_buy}"}
+      logger.debug {"order_buy: #{order_sell}"}
       if order_buy && order_sell
         logger.error "ID:#{id} one order made a trade ?! order id:#{trade.order_id}"
         return

@@ -8,7 +8,6 @@ ENV APP_HOME=/home/app \
 
 # Install system dependencies.
 RUN apt-get update && apt-get upgrade -y
-RUN apt-get install libsecp256k1-dev -y
 
 # Create group "app" and user "app".
 RUN groupadd -r --gid ${GID} app \

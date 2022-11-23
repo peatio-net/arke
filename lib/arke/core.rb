@@ -14,8 +14,6 @@ require "bigdecimal/util"
 require "binance"
 require "bitx"
 require "rack"
-require "rlp"
-require "eth"
 
 module Arke; end
 

@@ -4,15 +4,6 @@ require "clamp"
 
 require "arke/core"
 
-require "arke/ethereum/exceptions"
-require "arke/ethereum/secp256k1"
-require "arke/ethereum/constant"
-require "arke/ethereum/address"
-require "arke/ethereum/public_key"
-require "arke/ethereum/private_key"
-require "arke/ethereum/utils"
-require "arke/ethereum/base_convert"
-
 require "arke/strategy/base"
 require "arke/strategy/copy"
 require "arke/strategy/fixedprice"

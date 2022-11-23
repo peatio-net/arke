@@ -8,7 +8,6 @@ steps:
     image: ruby:3.0
     commands:
       - apt-get update
-      - apt-get install -y libsecp256k1-dev
       - gem update bundler
       - bundle --jobs $(nproc)
       - bundle exec rspec spec
