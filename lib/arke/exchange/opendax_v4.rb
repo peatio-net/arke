@@ -261,7 +261,7 @@ module Arke::Exchange
         logger.debug { "ACCOUNT:#{id} trade received: #{args}" }
 
         side = args[7].to_sym
-        notify_private_trade(Arke::Trade.new(args[1], args[0], side, args[3].to_f, args[2].to_f, args[4], args[6]), false)
+        notify_private_trade(Arke::Trade.new(args[1], args[0], side, args[3].to_f, args[2].to_f, args[4], args[6]), true)
       when EVENT_ORDER_CANCEL, EVENT_ORDER_UPDATE, EVENT_ORDER_REJECT, EVENT_ORDER_CREATE
         # Event example [4,"on",["btcusdt",18,"3b0474d7-6219-445b-a614-7208f9360135","buy","d","l","0.002","0","0","0.001","0.001",0,1639469280,"0.002","0.002"]]
 
