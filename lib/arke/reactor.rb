@@ -40,7 +40,7 @@ module Arke
       @metrics["24h_market_volume"].observe(1, {"volume": trade.amount*trade.price, "market": trade.market})
     end
 
-    def count_private_trade_volumes(trade)
+    def count_private_trade_volumes(trade, _)
       @metrics["24h_market_volume"].observe(1, {"volume": trade.volume, "market": trade.market})
     end
 
@@ -91,28 +91,27 @@ module Arke
     end
 
     def run_metrics_server!
-      ::Thread.new do
-        server = ::PrometheusExporter::Server::WebServer.new bind: "0.0.0.0", port: 4242
-        server.start
+      server = ::PrometheusExporter::Server::WebServer.new bind: "0.0.0.0", port: 4242
 
-        # wire up a default local client
-        ::PrometheusExporter::Client.default = ::PrometheusExporter::LocalClient.new(collector: server.collector)
+      # wire up a default local client
+      ::PrometheusExporter::Client.default = ::PrometheusExporter::LocalClient.new(collector: server.collector)
 
-        # this ensures basic process instrumentation metrics are added such as RSS and Ruby metrics
-        ::PrometheusExporter::Instrumentation::Process.start(type:   "arke",
-                                                            labels: {ruby_process: "label for all process metrics"})
+      # this ensures basic process instrumentation metrics are added such as RSS and Ruby metrics
+      ::PrometheusExporter::Instrumentation::Process.start(type:   "arke",
+                                                          labels: {ruby_process: "label for all process metrics"})
 
-        @metrics["order_count"] = ::PrometheusExporter::Metric::Gauge.new("order_count",
-                                                                          "count of orders created by Arke for each market and side")
-        @metrics["account_balance"] = ::PrometheusExporter::Metric::Gauge.new("account_balance",
-                                                                          "count of balance for each account used by the Arke")
-        @metrics["24h_market_volume"] = ::PrometheusExporter::Metric::Counter.new("24h_market_volume",
-                                                                            "sum of the market volume for 24 hours")
+      @metrics["order_count"] = ::PrometheusExporter::Metric::Gauge.new("order_count",
+                                                                        "count of orders created by Arke for each market and side")
+      @metrics["account_balance"] = ::PrometheusExporter::Metric::Gauge.new("account_balance",
+                                                                        "count of balance for each account used by the Arke")
+      @metrics["24h_market_volume"] = ::PrometheusExporter::Metric::Counter.new("24h_market_volume",
+                                                                          "sum of the market volume for 24 hours")
 
-        server.collector.register_metric(@metrics["order_count"])
-        server.collector.register_metric(@metrics["account_balance"])
-        server.collector.register_metric(@metrics["24h_market_volume"])
-      end
+      server.collector.register_metric(@metrics["order_count"])
+      server.collector.register_metric(@metrics["account_balance"])
+      server.collector.register_metric(@metrics["24h_market_volume"])
+
+      server
     end
 
     def run
@@ -121,7 +120,9 @@ module Arke
         trap("TERM") { stop }
 
         # Start metrics server
-        run_metrics_server!
+        server = run_metrics_server!
+
+        @thr = ::Thread.new { server.start }
 
         # Connect Private Web Sockets
         @accounts.each do |_id, account|
@@ -291,6 +292,7 @@ module Arke
     # Stops workers and strategy execution
     def stop
       puts "Shutting down arke"
+      ::Thread.kill(@thr)
       EM.stop
     end
   end
