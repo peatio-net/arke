@@ -9,10 +9,12 @@ module Arke
 
     GRACE_TIME = 3.0
     FETCH_OPEN_ORDERS_PERIOD = 600
+    ORDER_COUNT_PERIOD = 30
 
     def initialize(strategies_configs, accounts_configs, dry_run)
       @dry_run = dry_run
       @logger = Arke::Log
+      @metrics = {} # this will be filled out during metrics server start
       init_accounts(accounts_configs)
       init_strategies(strategies_configs)
     end
@@ -27,9 +29,19 @@ module Arke
       @markets = []
       accounts_configs.each do |config|
         account = @accounts[config["id"]] = Arke::Exchange.create(config)
+        account.register_on_public_trade_cb(&method(:count_public_trade_volumes))
+        account.register_on_private_trade_cb(&method(:count_private_trade_volumes))
         executor = ActionExecutor.new(account, purge_on_push: true)
         account.executor = executor
       end
+    end
+
+    def count_public_trade_volumes(trade)
+      @metrics["24h_market_volume"].observe(1, {"volume": trade.amount*trade.price, "market": trade.market})
+    end
+
+    def count_private_trade_volumes(trade)
+      @metrics["24h_market_volume"].observe(1, {"volume": trade.volume, "market": trade.market})
     end
 
     def build_market(config, mode)
@@ -78,10 +90,38 @@ module Arke
       strategy
     end
 
+    def run_metrics_server!
+      ::Thread.new do
+        server = ::PrometheusExporter::Server::WebServer.new bind: "0.0.0.0", port: 4242
+        server.start
+
+        # wire up a default local client
+        ::PrometheusExporter::Client.default = ::PrometheusExporter::LocalClient.new(collector: server.collector)
+
+        # this ensures basic process instrumentation metrics are added such as RSS and Ruby metrics
+        ::PrometheusExporter::Instrumentation::Process.start(type:   "arke",
+                                                            labels: {ruby_process: "label for all process metrics"})
+
+        @metrics["order_count"] = ::PrometheusExporter::Metric::Gauge.new("order_count",
+                                                                          "count of orders created by Arke for each market and side")
+        @metrics["account_balance"] = ::PrometheusExporter::Metric::Gauge.new("account_balance",
+                                                                          "count of balance for each account used by the Arke")
+        @metrics["24h_market_volume"] = ::PrometheusExporter::Metric::Counter.new("24h_market_volume",
+                                                                            "sum of the market volume for 24 hours")
+
+        server.collector.register_metric(@metrics["order_count"])
+        server.collector.register_metric(@metrics["account_balance"])
+        server.collector.register_metric(@metrics["24h_market_volume"])
+      end
+    end
+
     def run
       EM.synchrony do
         trap("INT") { stop }
         trap("TERM") { stop }
+
+        # Start metrics server
+        run_metrics_server!
 
         # Connect Private Web Sockets
         @accounts.each do |_id, account|
@@ -118,6 +158,13 @@ module Arke
         @strategies.each do |strategy|
           Fiber.new do
             EM::Synchrony.add_periodic_timer(FETCH_OPEN_ORDERS_PERIOD) { fetch_openorders(strategy) }
+
+            EM::Synchrony.add_periodic_timer(ORDER_COUNT_PERIOD) do
+              strategy.sources.each do |m|
+                @metrics["order_count"].observe(m.orderbook[:buy].length, {"side": "buy", "market": m.id})
+                @metrics["order_count"].observe(m.orderbook[:sell].length, {"side": "sell", "market": m.id})
+              end
+            end
 
             if strategy.delay_the_first_execute
               logger.warn { "ID:#{strategy.id} Delaying the first execution" }
@@ -174,6 +221,16 @@ module Arke
 
         begin
           ex.fetch_balances
+          ex.get_balances.each do |bal|
+            %w[free locked total].each do |bal_type|
+              @metrics["account_balance"].observe(bal[bal_type],
+                                                  {
+                                                    "name":     ex.id,
+                                                    "type":     bal_type,
+                                                    "currency": bal["currency"]
+                                                  })
+            end
+          end
         rescue StandardError => e
           logger.error { "ACCOUNT:#{ex.id} Fetching balances on #{ex.driver} failed: #{e}\n#{e.backtrace.join("\n")}" }
         end

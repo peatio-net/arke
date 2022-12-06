@@ -115,6 +115,8 @@ GEM
     minitest (5.16.3)
     multi_json (1.15.0)
     multipart-post (2.2.3)
+    prometheus_exporter (2.0.6)
+      webrick
     pry (0.14.1)
       coderay (~> 1.1)
       method_source (~> 1.0)
@@ -152,12 +154,16 @@ GEM
       addressable (>= 2.8.0)
       crack (>= 0.3.2)
       hashdiff (>= 0.4.0, < 2.0.0)
+    webrick (1.7.0)
     websocket-driver (0.7.5)
       websocket-extensions (>= 0.1.0)
     websocket-extensions (0.1.5)
 
 PLATFORMS
   arm64-darwin-21
+  x86_64-darwin-20
+  x86_64-darwin-21
+  x86_64-linux
 
 DEPENDENCIES
   arke!
@@ -170,6 +176,7 @@ DEPENDENCIES
   fiddler-rb (~> 0.1.3)!
   irb (~> 1.0)
   mime-types (~> 3.3)
+  prometheus_exporter (~> 2.0.6)
   pry (~> 0.12)
   rexml
   rspec (~> 3.9)

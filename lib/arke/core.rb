@@ -15,6 +15,11 @@ require "binance"
 require "bitx"
 require "rack"
 
+require "prometheus_exporter"
+require "prometheus_exporter/server"
+require "prometheus_exporter/client"
+require "prometheus_exporter/instrumentation"
+
 module Arke; end
 
 require "arke/helpers/precision"
