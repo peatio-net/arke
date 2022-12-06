@@ -243,15 +243,16 @@ describe Arke::Exchange::OpendaxV4 do
         default_opendax_v4.ws_handle_public_event(Arke::Exchange::OpendaxV4::EVENT_ORDERBOOK_SNAPSHOT, snapshot)
 
         expect(default_opendax_v4.update_orderbook("btcusdt")[:sell].to_hash).to eq(
-          249.16.to_d => 0.20603.to_d,
-          248.69.to_d => 0.09944.to_d,
-          248.66.to_d => 0.05057.to_d
-        )
-
-        expect(default_opendax_v4.update_orderbook("btcusdt")[:buy].to_hash).to eq(
           252.32.to_d => 0.2.to_d,
           252.92.to_d => 0.90403.to_d,
           253.08.to_d => 0.73563.to_d
+        )
+
+        expect(default_opendax_v4.update_orderbook("btcusdt")[:buy].to_hash).to eq(
+
+          249.16.to_d => 0.20603.to_d,
+          248.69.to_d => 0.09944.to_d,
+          248.66.to_d => 0.05057.to_d
         )
       end
     end
@@ -261,14 +262,15 @@ describe Arke::Exchange::OpendaxV4 do
         default_opendax_v4.ws_handle_public_event(Arke::Exchange::OpendaxV4::EVENT_ORDERBOOK_SNAPSHOT, snapshot)
         default_opendax_v4.ws_handle_public_event(Arke::Exchange::OpendaxV4::EVENT_ORDERBOOK_INCREMENT, ["btcusdt", 6112, [], [["252.32", "0.1"]]])
         expect(default_opendax_v4.update_orderbook("btcusdt")[:sell].to_hash).to eq(
-          249.16.to_d => 0.20603.to_d,
-          248.69.to_d => 0.09944.to_d,
-          248.66.to_d => 0.05057.to_d
+          252.32.to_d => 0.2.to_d,
+          252.92.to_d => 0.90403.to_d,
+          253.08.to_d => 0.73563.to_d
         )
         expect(default_opendax_v4.update_orderbook("btcusdt")[:buy].to_hash).to eq(
           252.32.to_d => 0.1.to_d,
-          252.92.to_d => 0.90403.to_d,
-          253.08.to_d => 0.73563.to_d
+          249.16.to_d => 0.20603.to_d,
+          248.69.to_d => 0.09944.to_d,
+          248.66.to_d => 0.05057.to_d
         )
       end
 
@@ -278,13 +280,16 @@ describe Arke::Exchange::OpendaxV4 do
         default_opendax_v4.ws_handle_public_event(Arke::Exchange::OpendaxV4::EVENT_ORDERBOOK_INCREMENT, ["btcusdt", 6113, [["248.69", "0.0"]], []])
 
         expect(default_opendax_v4.update_orderbook("btcusdt")[:sell].to_hash).to eq(
-          249.16.to_d => 0.20603.to_d,
-          248.66.to_d => 0.05057.to_d
+          252.32.to_d => 0.2.to_d,
+          252.92.to_d => 0.90403.to_d,
+          253.08.to_d => 0.73563.to_d
+
         )
 
         expect(default_opendax_v4.update_orderbook("btcusdt")[:buy].to_hash).to eq(
-          252.92.to_d => 0.90403.to_d,
-          253.08.to_d => 0.73563.to_d
+          249.16.to_d => 0.20603.to_d,
+          248.69.to_d => 0.09944.to_d,
+          248.66.to_d => 0.05057.to_d
         )
       end
 
@@ -294,12 +299,14 @@ describe Arke::Exchange::OpendaxV4 do
         default_opendax_v4.ws_handle_public_event(Arke::Exchange::OpendaxV4::EVENT_ORDERBOOK_INCREMENT, ["btcusdt", 6113, [["248.69", ""]], []])
 
         expect(default_opendax_v4.update_orderbook("btcusdt")[:sell].to_hash).to eq(
-          249.16.to_d => 0.20603.to_d,
-          248.66.to_d => 0.05057.to_d
-        )
-        expect(default_opendax_v4.update_orderbook("btcusdt")[:buy].to_hash).to eq(
+          252.32.to_d => 0.2.to_d,
           252.92.to_d => 0.90403.to_d,
           253.08.to_d => 0.73563.to_d
+        )
+        expect(default_opendax_v4.update_orderbook("btcusdt")[:buy].to_hash).to eq(
+          249.16.to_d => 0.20603.to_d,
+          248.69.to_d => 0.09944.to_d,
+          248.66.to_d => 0.05057.to_d
         )
       end
 

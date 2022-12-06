@@ -181,8 +181,8 @@ module Arke::Exchange
       when EVENT_ORDERBOOK_SNAPSHOT
         content = {}
         market = args[0]
-        content["asks"] = args[3]
-        content["bids"] = args[2]
+        content["asks"] = args[2]
+        content["bids"] = args[3]
 
         @books[market] = {
           book:     create_or_update_orderbook(Arke::Orderbook::Orderbook.new(market), content),
@@ -202,8 +202,8 @@ module Arke::Exchange
 
         notify_orderbook_increment(args)
 
-        bids = args[3]
         asks = args[2]
+        bids = args[3]
         create_or_update_orderbook(@books[market][:book], {"bids" => bids}) if bids && !bids.empty?
         create_or_update_orderbook(@books[market][:book], {"asks" => asks}) if asks && !asks.empty?
         @books[market][:sequence] = args[1]
