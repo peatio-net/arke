@@ -17,6 +17,23 @@ steps:
       - name: bundler-cache
         path: /usr/local/bundle
 
+  - name: go-coverage
+    image: busybox:stable
+    environment:
+      ANALYTICS_DATABASE_HOST: pg.opendax.app
+      ANALYTICS_DATABASE_PORT: 30432
+      ANALYTICS_DATABASE_USERNAME: coverage_analytics
+      ANALYTICS_DATABASE_PASSWORD:
+        from_secret: pgpass_coverage
+      ANALYTICS_DATABASE_NAME: coverage_analytics
+      ANALYTICS_COMPONENT: arke
+    commands:
+      - wget https://github.com/openware/go-coverage/releases/download/v1.0.0-alpha/go-coverage && chmod +x ./go-coverage
+      - ./go-coverage ./coverage/coverage.xml
+    when:
+      branch:
+        - "master"
+
   - name: tag-snapshot
     image: quay.io/openware/sdk-citools:2.6.7
     environment:

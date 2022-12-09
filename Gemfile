@@ -22,6 +22,7 @@ group :development, :test do
   gem "irb", "~> 1.0"
   gem "mime-types", "~> 3.3"
   gem "em-websocket"
+  gem 'simplecov-cobertura'
 end
 
 gem "simplecov", require: false, group: :test
