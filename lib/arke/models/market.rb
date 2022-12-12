@@ -47,6 +47,10 @@ class Arke::Market
     @orderbook = @account.update_orderbook(id)
   end
 
+  def fetch_24h_volume
+    @account.fetch_24h_volume(id)
+  end
+
   # Return the current state of the orderbook received by websocket
   def realtime_orderbook
     account.books[id]&.fetch(:book)

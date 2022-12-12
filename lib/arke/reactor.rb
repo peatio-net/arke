@@ -37,11 +37,11 @@ module Arke
     end
 
     def count_public_trade_volumes(trade)
-      @metrics["24h_market_volume"].observe(1, {"volume": trade.amount*trade.price, "market": trade.market})
+      @metrics["24h_market_volume"].observe(trade.amount * trade.price, {"exchange": trade.exchange, "market": trade.market})
     end
 
     def count_private_trade_volumes(trade, _)
-      @metrics["24h_market_volume"].observe(1, {"volume": trade.volume, "market": trade.market})
+      @metrics["24h_market_volume"].observe(trade.volume, {"exchange": "opendax", "market": trade.market})
     end
 
     def build_market(config, mode)
@@ -90,7 +90,7 @@ module Arke
       strategy
     end
 
-    def run_metrics_server!
+    def create_metrics_server!
       server = ::PrometheusExporter::Server::WebServer.new bind: "0.0.0.0", port: 4242
 
       # wire up a default local client
@@ -104,11 +104,14 @@ module Arke
                                                                         "count of orders created by Arke for each market and side")
       @metrics["account_balance"] = ::PrometheusExporter::Metric::Gauge.new("account_balance",
                                                                         "count of balance for each account used by the Arke")
+      @metrics["24h_cumulative_market_volume"] = ::PrometheusExporter::Metric::Gauge.new("24h_cumulative_market_volume",
+                                                                          "cumulative volume of the exchange market")
       @metrics["24h_market_volume"] = ::PrometheusExporter::Metric::Counter.new("24h_market_volume",
                                                                           "sum of the market volume for 24 hours")
 
       server.collector.register_metric(@metrics["order_count"])
       server.collector.register_metric(@metrics["account_balance"])
+      server.collector.register_metric(@metrics["24h_cumulative_market_volume"])
       server.collector.register_metric(@metrics["24h_market_volume"])
 
       server
@@ -120,9 +123,14 @@ module Arke
         trap("TERM") { stop }
 
         # Start metrics server
-        server = run_metrics_server!
+        server = create_metrics_server!
 
-        @thr = ::Thread.new { server.start }
+        @thr = ::Thread.new do
+          server.start
+        rescue StandardError => e
+          logger.error "#{e}: #{e.backtrace.join("\n")}"
+          stop
+        end
 
         # Connect Private Web Sockets
         @accounts.each do |_id, account|
@@ -164,6 +172,12 @@ module Arke
               strategy.sources.each do |m|
                 @metrics["order_count"].observe(m.orderbook[:buy].length, {"side": "buy", "market": m.id})
                 @metrics["order_count"].observe(m.orderbook[:sell].length, {"side": "sell", "market": m.id})
+
+                if m.account.driver == "binance"
+                  @metrics["24h_cumulative_market_volume"].observe(m.fetch_24h_volume, {"exchange": "binance", "base_currency": m.base, "market":  m.id})
+                else
+                  logger.debug { "ID: #{m.account.driver} DO NOT provide the '24h_cumulative_market_volume' metric" }
+                end
               end
             end
 
@@ -292,8 +306,9 @@ module Arke
     # Stops workers and strategy execution
     def stop
       puts "Shutting down arke"
-      ::Thread.kill(@thr)
       EM.stop
+      puts "Shutting down Threads"
+      ::Thread.exit
     end
   end
 end

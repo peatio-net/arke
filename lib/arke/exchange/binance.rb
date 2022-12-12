@@ -201,6 +201,13 @@ module Arke::Exchange
       [snapshot["lastUpdateId"], orderbook]
     end
 
+    def fetch_24h_volume(market_name)
+      # 'limit' value reflects amount of klines for the last 24 hours (according to the given 'interval')
+      klines = @client.klines(symbol: market_name, interval: "3m", limit: 480)
+
+      klines.inject(0.0) {|sum, k| sum + Float(k[5]) }
+    end
+
     # def ws_subscribe_orderbook(market)
     #   stream = "#{market.downcase}@depth"
     #   add_market_to_listen(market)
