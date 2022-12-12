@@ -181,8 +181,8 @@ module Arke::Exchange
       when EVENT_ORDERBOOK_SNAPSHOT
         content = {}
         market = args[0]
-        content["asks"] = args[3]
-        content["bids"] = args[2]
+        content["asks"] = args[2]
+        content["bids"] = args[3]
 
         @books[market] = {
           book:     create_or_update_orderbook(Arke::Orderbook::Orderbook.new(market), content),
@@ -202,8 +202,8 @@ module Arke::Exchange
 
         notify_orderbook_increment(args)
 
-        bids = args[3]
         asks = args[2]
+        bids = args[3]
         create_or_update_orderbook(@books[market][:book], {"bids" => bids}) if bids && !bids.empty?
         create_or_update_orderbook(@books[market][:book], {"asks" => asks}) if asks && !asks.empty?
         @books[market][:sequence] = args[1]
@@ -261,7 +261,7 @@ module Arke::Exchange
         logger.debug { "ACCOUNT:#{id} trade received: #{args}" }
 
         side = args[7].to_sym
-        notify_private_trade(Arke::Trade.new(args[1], args[0], side, args[3].to_f, args[2].to_f, args[4], args[5]), false)
+        notify_private_trade(Arke::Trade.new(args[1], args[0], side, args[3].to_f, args[2].to_f, args[4], args[6]), true)
       when EVENT_ORDER_CANCEL, EVENT_ORDER_UPDATE, EVENT_ORDER_REJECT, EVENT_ORDER_CREATE
         # Event example [4,"on",["btcusdt",18,"3b0474d7-6219-445b-a614-7208f9360135","buy","d","l","0.002","0","0","0.001","0.001",0,1639469280,"0.002","0.002"]]
 
@@ -387,17 +387,7 @@ module Arke::Exchange
     def generate_jwt
       raise "There is no api key" if @api_key.nil?
 
-      key = Eth::Key.new priv: @api_key
-      address = key.address
-
-      response = post("/api/v1/auth/sign_challenge", {algorithm: 'ETH', key: address})
-      raise response.body.to_s if response.status != 200
-
-      token = response.body['challenge_token']
-      hash = sign_eth_message(token)
-      signature = generate_signature(hash)
-
-      response = post("/api/v1/auth/asymmetric_login",{key: address, challenge_token_signature: signature})
+      response = post("/api/v1/auth/token?grant_type=password", {email: @api_key, password: @secret})
       raise response.body.to_s if response.status != 200
 
       response.body['access_token']
@@ -444,22 +434,6 @@ module Arke::Exchange
         "apikey"           => @kong_key,
         "Content-Type"     => "application/json",
       }
-    end
-
-    def generate_signature(hash)
-      private_key = Arke::Ethereum::PrivateKey.new(@api_key)
-
-      # Sigh hash with private key
-      v, r, s = Arke::Ethereum::Secp256k1.recoverable_sign(hash, private_key.encode(:bin))
-      # Form signature from R and S values
-      raw_sig = Arke::Ethereum::Utils.zpad_int(r) + Arke::Ethereum::Utils.zpad_int(s)
-
-      "0x" + raw_sig.unpack("H*")[0] + v.to_s(16)
-    end
-
-    def sign_eth_message(token)
-      message = "\x19Ethereum Signed Message:\n#{token.length}#{token}"
-      Arke::Ethereum::Utils.keccak256(message)
     end
   end
 end

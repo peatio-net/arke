@@ -31,12 +31,6 @@ Gem::Specification.new do |spec|
   spec.add_dependency "colorize", "~> 0.8.1"
   spec.add_dependency "rack", "~> 2.2"
 
-  # Ethereum
-  spec.add_dependency "bitcoin-secp256k1", "~> 0.4"
-  spec.add_dependency "digest-sha3-patched-ruby-3", "~> 1.1"
-  spec.add_dependency "eth", "~>0.4.17"
-  spec.add_dependency "rlp"
-
   ## Exchanges API libraries
   spec.add_dependency "bitx", "~> 0.2.2"
 end

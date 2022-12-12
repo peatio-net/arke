@@ -7,6 +7,7 @@ gemspec
 
 gem "clamp", "~> 1.3.1"
 gem "binance", "~> 1.2", git: "https://github.com/caherrerapa/binance.git"
+gem "prometheus_exporter", "~> 2.0.6"
 
 group :development, :test do
   # Call "byebug" anywhere in the code to stop execution and get a debugger console
@@ -21,6 +22,7 @@ group :development, :test do
   gem "irb", "~> 1.0"
   gem "mime-types", "~> 3.3"
   gem "em-websocket"
+  gem 'simplecov-cobertura'
 end
 
 gem "simplecov", require: false, group: :test
