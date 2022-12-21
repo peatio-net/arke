@@ -10,6 +10,7 @@ module Arke
     GRACE_TIME = 3.0
     FETCH_OPEN_ORDERS_PERIOD = 600
     ORDER_COUNT_PERIOD = 30
+    FETCH_MARKETS_VOLUME_PERIOD = 90
 
     def initialize(strategies_configs, accounts_configs, dry_run)
       @dry_run = dry_run
@@ -168,16 +169,20 @@ module Arke
           Fiber.new do
             EM::Synchrony.add_periodic_timer(FETCH_OPEN_ORDERS_PERIOD) { fetch_openorders(strategy) }
 
-            EM::Synchrony.add_periodic_timer(ORDER_COUNT_PERIOD) do
+            EM::Synchrony.add_periodic_timer(FETCH_MARKETS_VOLUME_PERIOD) do
               strategy.sources.each do |m|
-                @metrics["order_count"].observe(m.orderbook[:buy].length, {"side": "buy", "market": m.id})
-                @metrics["order_count"].observe(m.orderbook[:sell].length, {"side": "sell", "market": m.id})
-
                 if m.account.driver == "binance"
                   @metrics["24h_cumulative_market_volume"].observe(m.fetch_24h_volume, {"exchange": "binance", "base_currency": m.base, "market":  m.id})
                 else
                   logger.debug { "ID: #{m.account.driver} DO NOT provide the '24h_cumulative_market_volume' metric" }
                 end
+              end
+            end
+
+            EM::Synchrony.add_periodic_timer(ORDER_COUNT_PERIOD) do
+              strategy.sources.each do |m|
+                @metrics["order_count"].observe(m.orderbook[:buy].length, {"side": "buy", "market": m.id})
+                @metrics["order_count"].observe(m.orderbook[:sell].length, {"side": "sell", "market": m.id})
               end
             end
 

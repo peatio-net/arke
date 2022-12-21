@@ -205,6 +205,16 @@ module Arke::Exchange
       # 'limit' value reflects amount of klines for the last 24 hours (according to the given 'interval')
       klines = @client.klines(symbol: market_name, interval: "3m", limit: 480)
 
+      if klines.class == Hash && !klines["code"].nil?
+        if klines["code"] == -1003
+          logger.debug { "Too much request weight used. Current limit is 1200 request weight per 1 MINUTE" }
+        else
+          logger.error { "Binance API Error: code: #{klines['code']}, error_msg: #{klines['msg']}" }
+        end
+
+        return 0
+      end
+
       klines.inject(0.0) {|sum, k| sum + Float(k[5]) }
     end
 
