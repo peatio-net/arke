@@ -151,29 +151,65 @@ module Arke::Orderbook
       )
     end
 
-    def adjust_volume_simple(adjusted_volume_base, adjusted_volume_quote)
-      bids_ratio = adjusted_volume_quote.to_d / volume_bids_quote.to_d
-      asks_ratio = adjusted_volume_base.to_d / volume_asks_base.to_d
-
-      asks = ::RBTree.new
+    def adjust_volume_simple(adjusted_volume_base, adjusted_volume_quote, source_account=false)
+      bids_ratio = 0.to_d
+      asks_ratio = 0.to_d
       bids = ::RBTree.new
+      asks = ::RBTree.new
       adj_volume_bids_base = 0.to_d
-      adj_volume_asks_base = 0.to_d
       adj_volume_bids_quote = 0.to_d
+      adj_volume_asks_base = 0.to_d
       adj_volume_asks_quote = 0.to_d
 
-      self[:buy].each do |price, amount|
-        order = Arke::Order.new(@market, price, amount * bids_ratio, :buy)
-        bids[order.price] = order.amount
-        adj_volume_bids_base += order.amount
-        adj_volume_bids_quote += order.amount.to_d * order.price.to_d
+      # Calculate ratio for target and source account
+      if source_account
+        bids_ratio, asks_ratio = calculate_ratio_source(adjusted_volume_base, adjusted_volume_quote)
+      else
+        bids_ratio, asks_ratio = calculate_ratio_target(adjusted_volume_base, adjusted_volume_quote)
       end
 
-      self[:sell].each do |price, amount|
-        order = Arke::Order.new(@market, price, amount * asks_ratio, :sell)
-        asks[order.price] = order.amount
-        adj_volume_asks_base += order.amount
-        adj_volume_asks_quote += order.amount.to_d * order.price.to_d
+      # Adjust bids amounts for target limits
+      # Adjust bids amounts if orderbook volume bigger than source limits
+      if !source_account
+        bids, adj_volume_bids_base, adj_volume_bids_quote = adjust_bids_amounts(
+          bids_ratio,
+          bids,
+          adj_volume_bids_base,
+          adj_volume_bids_quote
+        )
+      elsif volume_bids_base > adjusted_volume_base && source_account
+        bids, adj_volume_bids_base, adj_volume_bids_quote = adjust_bids_amounts(
+          bids_ratio,
+          bids,
+          adj_volume_bids_base,
+          adj_volume_bids_quote
+        )
+      else
+        adj_volume_bids_base = self.volume_bids_base
+        adj_volume_bids_quote = self.volume_bids_quote
+        bids = self[:buy]
+      end
+
+      # Adjust asks amounts for target limits
+      # Adjust asks amounts if orderbook volume bigger than source limits
+      if !source_account
+        asks, adj_volume_asks_base, adj_volume_asks_quote = adjust_asks_amounts(
+          asks_ratio,
+          asks,
+          adj_volume_asks_base,
+          adj_volume_asks_quote
+        )
+      elsif volume_asks_quote > adjusted_volume_quote && source_account
+        asks, adj_volume_asks_base, adj_volume_asks_quote = adjust_asks_amounts(
+          asks_ratio,
+          asks,
+          adj_volume_asks_base,
+          adj_volume_asks_quote
+        )
+      else
+        adj_volume_asks_base = self.volume_asks_base
+        adj_volume_asks_quote = self.volume_asks_quote
+        asks = self[:sell]
       end
 
       ::Arke::Orderbook::Orderbook.new(
@@ -185,6 +221,46 @@ module Arke::Orderbook
         volume_bids_base:  adj_volume_bids_base,
         volume_asks_base:  adj_volume_asks_base
       )
+    end
+
+    # Bids ratio with quote currency
+    # Asks ratio with base currenct
+    def calculate_ratio_target(adjusted_volume_base, adjusted_volume_quote)
+      bids_ratio = adjusted_volume_quote.to_d / volume_bids_quote.to_d
+      asks_ratio = adjusted_volume_base.to_d / volume_asks_base.to_d
+
+      return bids_ratio, asks_ratio
+    end
+
+    # Bids ratio with base currency
+    # Asks ration with quote currency
+    def calculate_ratio_source(adjusted_volume_base, adjusted_volume_quote)
+      bids_ratio = adjusted_volume_base.to_d / volume_bids_base.to_d
+      asks_ratio = adjusted_volume_quote.to_d / volume_asks_quote.to_d
+
+      return bids_ratio, asks_ratio
+    end
+
+    # Adjust bids amounts for each price point
+    def adjust_bids_amounts(ratio, bids, adj_volume_bids_base, adj_volume_bids_quote)
+      self[:buy].each do |price, amount|
+        order = Arke::Order.new(@market, price, amount * ratio, :buy)
+        bids[order.price] = order.amount
+        adj_volume_bids_base += order.amount
+        adj_volume_bids_quote += order.amount.to_d * order.price.to_d
+      end
+      return bids, adj_volume_bids_base, adj_volume_bids_quote
+    end
+
+    # Adjust asks amounts for each price point
+    def adjust_asks_amounts(ratio, asks, adj_volume_asks_base, adj_volume_asks_quote)
+      self[:sell].each do |price, amount|
+        order = Arke::Order.new(@market, price, amount * ratio, :sell)
+        asks[order.price] = order.amount
+        adj_volume_asks_base += order.amount
+        adj_volume_asks_quote += order.amount.to_d * order.price.to_d
+      end
+      return asks, adj_volume_asks_base, adj_volume_asks_quote
     end
 
     def print(side=:buy)

@@ -9,30 +9,39 @@ describe Arke::Strategy::Orderback do
   let(:side) { "both" }
   let(:spread_asks) { 0.01 }
   let(:spread_bids) { 0.02 }
-  let(:limit_asks_base) { 1.0 }
-  let(:limit_bids_base) { 1.5 }
+  let(:level_size) { 0.01 }
+  let(:level_count) { 5 }
   let(:orderback_grace_time) { nil }
   let(:orderback_type) { nil }
   let(:enable_orderback) { "true" }
+  let(:apply_safe_limits_on_source) { "true" }
   let(:fx_config) { nil }
+  let(:balance_base_perc) { nil }
+  let(:balance_quote_perc) { nil }
+  let(:limit_asks_quote) { nil }
+  let(:limit_bids_quote) { nil }
 
   let(:config) do
     {
       "id"      => "orderback-BTCUSD",
       "type"    => "orderback",
+      "debug" => true,
       "params"  => {
         "spread_bids"           => spread_bids,
         "spread_asks"           => spread_asks,
-        "limit_bids_base"       => limit_bids_base,
-        "limit_asks_base"       => limit_asks_base,
         "levels_algo"           => "constant",
-        "levels_size"           => 0.01,
-        "levels_count"          => 5,
+        "levels_size"           => level_size,
+        "levels_count"          => level_count,
         "side"                  => side,
         "min_order_back_amount" => 0.001,
         "orderback_grace_time"  => orderback_grace_time,
         "orderback_type"        => orderback_type,
         "enable_orderback"      => enable_orderback,
+        "apply_safe_limits_on_source" => apply_safe_limits_on_source,
+        "balance_base_perc" => balance_base_perc,
+        "balance_quote_perc" => balance_quote_perc,
+        "limit_asks_quote" => limit_asks_quote,
+        "limit_bids_quote" => limit_bids_quote,
       },
       "fx"      => fx_config,
       "target"  => {
@@ -67,19 +76,562 @@ describe Arke::Strategy::Orderback do
     let(:side) { "both" }
     it "outputs a target orberbook" do
       expect(target_bids.to_hash).to eq(
-        "135.9554".to_d => "0.95982849262347e-2".to_d,
-        "135.9652".to_d => "0.0527190829074743".to_d,
-        "135.9750".to_d => "0.1131269161072195e0".to_d,
-        "135.9848".to_d => "0.1727615249109062e0".to_d,
-        "136.0044".to_d => "0.11517941911481652e1".to_d,
+        "135.9554".to_d => "0.2196435728585954911e3".to_d,
+        "135.9652".to_d => "0.12064038332490535253e4".to_d,
+        "135.9750".to_d => "0.25887541608969201184e4".to_d,
+        "135.9848".to_d => "0.39534103098163002607e4".to_d,
+        "136.0044".to_d => "0.263572287430314589336e5".to_d,
       )
       expect(target_asks.to_hash).to eq(
-        (1_402_573_826_086_956_521.to_d * 1e-16) => (6_656_597_259_005_248.to_d * 1e-16),
-        "140.2688".to_d                            => "0.0028941727213066".to_d,
-        "140.2789".to_d                            => "0.0028941727213066".to_d,
-        "140.2890".to_d                            => "0.2417267470176631".to_d,
-        "140.2977264909".to_d                      => "0.0868251816391989".to_d
+        "0.1402573826086956521e3".to_d             => "0.228316045822963728137e5".to_d,
+        "140.2688".to_d                            => "0.992678460099842296e2".to_d,
+        "140.2789".to_d                            => "0.992678460099842296e2".to_d,
+        "140.2890".to_d                            => "0.82910371322311672223e4".to_d,
+        "0.1402977264909e3".to_d                   => "0.29780353802995268887e4".to_d
       )
+    end
+  end
+
+  context "limits from plugin" do
+    let(:source_account) { Arke::Exchange.create(source_config) }
+    let(:target_account) { Arke::Exchange.create(target_config) }
+    let(:source) { Arke::Market.new(config["sources"].first["market_id"], source_account, Arke::Helpers::Flags::DEFAULT_SOURCE_FLAGS) }
+    let(:target) { Arke::Market.new(config["target"]["market_id"], target_account, Arke::Helpers::Flags::DEFAULT_TARGET_FLAGS) }
+    let(:source_config) do
+      {
+        "id"     => 1,
+        "driver" => "bitfaker",
+        "orderbook" => orderbook,
+        "params" => {
+          "balances" => [
+            {
+              "currency" => "btc",
+              "total"    => source_base_balance,
+              "free"     => source_base_balance,
+              "locked"   => 0
+            },
+            {
+              "currency" => "usd",
+              "total"    => source_quote_balance,
+              "free"     => source_quote_balance,
+              "locked"   => 0
+            }
+          ]
+        }
+      }
+    end
+    let(:source_base_balance) { 1 }
+    let(:source_quote_balance) { 3_000 }
+
+    let(:target_config) do
+      {
+        "id"     => 2,
+        "driver" => "bitfaker",
+        "params" => {
+          "balances" => [
+            {
+              "currency" => "BTC",
+              "total"    => target_base_balance,
+              "free"     => target_base_balance,
+              "locked"   => 0.0,
+            },
+            {
+              "currency" => "USD",
+              "total"    => target_quote_balance,
+              "free"     => target_quote_balance,
+              "locked"   => 0.0,
+            }
+          ],
+        }
+      }
+    end
+
+    let(:level_size) { 1 }
+    let(:level_count) { 10 }
+    let(:orderbook) do
+      [
+        nil,
+        [
+          [1, 10_001, -0.3],
+          [2, 10_002, -0.8],
+          [3, 10_003, -1.1],
+          [4, 10_004, -1.2],
+          [5, 10_005, -1.4],
+          [6, 10_006, -1.6],
+          [7, 10_007, -2.0],
+          [8, 10_008, -2.4],
+          [9, 10_009, -2.9],
+          [10, 10_010, -2.6],
+          [11, 10_011, -3.7],
+          [12, 9999, 0.2],
+          [13, 9998, 0.4],
+          [14, 9997, 0.9],
+          [15, 9996, 1.4],
+          [16, 9995, 1.6],
+          [17, 9994, 1.8],
+          [18, 9993, 2.0],
+          [19, 9992, 2.3],
+          [20, 9991, 3.0],
+          [21, 9990, 2.7],
+          [22, 9989, 3.7],
+
+        ]
+      ]
+    end
+
+    let(:target_base_balance) { 3 }
+    let(:target_quote_balance) { 10_000 }
+    let(:source_base_balance) { 2 }
+    let(:source_quote_balance) { 3_000 }
+
+    let(:expected_limits) do
+      {
+        "5_target_asks_base_limit" => 3,
+        "5_target_bids_quote_limit" => 10_000,
+        "5_source_asks_quote_limit" => 3_000,
+        "5_source_bids_base_limit" => 2
+      }
+    end
+
+    it "for asks limited by source balance Mid price 10_000" do
+      target_orderbook = strategy.call
+
+      expect(strategy.debug_infos["6_volume_bids_base"].to_f <= expected_limits["5_source_bids_base_limit"].to_f).to eq(true)
+      expect(strategy.debug_infos["5_target_bids_quote_limit"]).to eq(expected_limits["5_target_bids_quote_limit"])
+      expect(strategy.debug_infos["5_source_bids_base_limit"]).to eq(expected_limits["5_source_bids_base_limit"])
+    end
+
+    it "for bids limited by source balance Mid price 10_000" do
+      target_orderbook = strategy.call
+
+      expect(strategy.debug_infos["6_volume_asks_quote"].to_f <= expected_limits["5_source_asks_quote_limit"].to_f).to eq(true)
+      expect(strategy.debug_infos["5_target_asks_base_limit"]).to eq(expected_limits["5_target_asks_base_limit"])
+      expect(strategy.debug_infos["5_source_asks_quote_limit"]).to eq(expected_limits["5_source_asks_quote_limit"])
+    end
+
+    context "for asks and bids limited by source balance in quote Mid price 10_000" do
+      let(:source_base_balance) { 4 }
+      let(:source_quote_balance) { 20_000 }
+      let(:target_base_balance) { 2 }
+      let(:target_quote_balance) { 40_000 }
+
+      let(:expected_limits) do
+        {
+          "5_target_asks_base_limit" => 2,
+          "5_target_bids_quote_limit" => 40_000,
+          "5_source_asks_quote_limit" => 20_000,
+          "5_source_bids_base_limit" => 4
+        }
+      end
+
+      it "for bids" do
+        target_orderbook = strategy.call
+
+        expect(strategy.debug_infos["6_volume_bids_base"].to_f <= expected_limits["5_source_bids_base_limit"].to_f).to eq(true)
+        expect(strategy.debug_infos["5_target_bids_quote_limit"]).to eq(expected_limits["5_target_bids_quote_limit"])
+        expect(strategy.debug_infos["5_source_bids_base_limit"]).to eq(expected_limits["5_source_bids_base_limit"])
+      end
+
+      it "for asks" do
+        target_orderbook = strategy.call
+
+        expect(strategy.debug_infos["6_volume_asks_quote"].to_f <= expected_limits["5_source_asks_quote_limit"].to_f).to eq(true)
+        expect(strategy.debug_infos["5_target_asks_base_limit"]).to eq(expected_limits["5_target_asks_base_limit"])
+        expect(strategy.debug_infos["5_source_asks_quote_limit"]).to eq(expected_limits["5_source_asks_quote_limit"])
+      end
+    end
+
+    context "for asks and bids limited by source balance in base Mid price 10_000" do
+      let(:source_base_balance) { 4 }
+      let(:source_quote_balance) { 60_000 }
+      let(:target_base_balance) { 6 }
+      let(:target_quote_balance) { 40_000 }
+
+      let(:expected_limits) do
+        {
+          "5_target_asks_base_limit" => 6,
+          "5_target_bids_quote_limit" => 40_000,
+          "5_source_asks_quote_limit" => 60_000,
+          "5_source_bids_base_limit" => 4
+        }
+      end
+
+      it "for bids" do
+        target_orderbook = strategy.call
+
+        expect(strategy.debug_infos["6_volume_bids_base"].to_f <= expected_limits["5_source_bids_base_limit"].to_f).to eq(true)
+        expect(strategy.debug_infos["5_target_bids_quote_limit"]).to eq(expected_limits["5_target_bids_quote_limit"])
+        expect(strategy.debug_infos["5_source_bids_base_limit"]).to eq(expected_limits["5_source_bids_base_limit"])
+      end
+
+      it "for asks" do
+        target_orderbook = strategy.call
+
+        expect(strategy.debug_infos["6_volume_asks_quote"].to_f <= expected_limits["5_source_asks_quote_limit"].to_f).to eq(true)
+        expect(strategy.debug_infos["5_target_asks_base_limit"]).to eq(expected_limits["5_target_asks_base_limit"])
+        expect(strategy.debug_infos["5_source_asks_quote_limit"]).to eq(expected_limits["5_source_asks_quote_limit"])
+      end
+    end
+
+    context "for asks and bids limited by target balance in base Mid price 10_000" do
+      let(:source_base_balance) { 6 }
+      let(:source_quote_balance) { 60_000 }
+      let(:target_base_balance) { 4 }
+      let(:target_quote_balance) { 40_000 }
+
+      let(:expected_limits) do
+        {
+          "5_target_asks_base_limit" => 4,
+          "5_target_bids_quote_limit" => 40_000,
+          "5_source_asks_quote_limit" => 60_000,
+          "5_source_bids_base_limit" => 6
+        }
+      end
+
+      it "for bids" do
+        target_orderbook = strategy.call
+
+        expect(strategy.debug_infos["6_volume_bids_quote"].to_f <= expected_limits["5_target_bids_quote_limit"].to_f).to eq(true)
+        expect(strategy.debug_infos["6_volume_bids_base"].to_f <= expected_limits["5_source_bids_base_limit"].to_f).to eq(true)
+        expect(strategy.debug_infos["5_target_bids_quote_limit"]).to eq(expected_limits["5_target_bids_quote_limit"])
+        expect(strategy.debug_infos["5_source_bids_base_limit"]).to eq(expected_limits["5_source_bids_base_limit"])
+      end
+
+      it "for asks" do
+        target_orderbook = strategy.call
+
+        expect(strategy.debug_infos["6_volume_asks_base"].to_f <= expected_limits["5_target_asks_base_limit"].to_f).to eq(true)
+        expect(strategy.debug_infos["6_volume_asks_quote"].to_f <= expected_limits["5_source_asks_quote_limit"].to_f).to eq(true)
+        expect(strategy.debug_infos["5_target_asks_base_limit"]).to eq(expected_limits["5_target_asks_base_limit"])
+        expect(strategy.debug_infos["5_source_asks_quote_limit"]).to eq(expected_limits["5_source_asks_quote_limit"])
+      end
+    end
+
+    context "for asks and bids with balance percentage and with limit for source balance. Mid price 10_000" do
+      let(:balance_base_perc) { 1 }
+      let(:balance_quote_perc) { 0.2 }
+      let(:source_base_balance) { 2 }
+      let(:source_quote_balance) { 20_000 }
+      let(:target_base_balance) { 4 }
+      let(:target_quote_balance) { 40_000 }
+
+      let(:expected_limits) do
+        {
+          "5_target_asks_base_limit" => 4,
+          "5_target_bids_quote_limit" => 8_000,
+          "5_source_asks_quote_limit" => 4_000,
+          "5_source_bids_base_limit" => 2
+        }
+      end
+
+      it "for bids" do
+        target_orderbook = strategy.call
+
+        expect(strategy.debug_infos["6_volume_bids_base"].to_f <= expected_limits["5_source_bids_base_limit"].to_f).to eq(true)
+        expect(strategy.debug_infos["5_target_bids_quote_limit"]).to eq(expected_limits["5_target_bids_quote_limit"])
+        expect(strategy.debug_infos["5_source_bids_base_limit"]).to eq(expected_limits["5_source_bids_base_limit"])
+      end
+
+      it "for asks" do
+        target_orderbook = strategy.call
+
+        expect(strategy.debug_infos["6_volume_asks_quote"].to_f <= expected_limits["5_source_asks_quote_limit"].to_f).to eq(true)
+        expect(strategy.debug_infos["5_target_asks_base_limit"]).to eq(expected_limits["5_target_asks_base_limit"])
+        expect(strategy.debug_infos["5_source_asks_quote_limit"]).to eq(expected_limits["5_source_asks_quote_limit"])
+      end
+    end
+
+    context "for asks and bids with balance percantage and with limit for target balance. Mid price 10_000" do
+      let(:balance_base_perc) { 0.5 }
+      let(:balance_quote_perc) { 0.5 }
+      let(:source_base_balance) { 4 }
+      let(:source_quote_balance) { 40_000 }
+      let(:target_base_balance) { 2 }
+      let(:target_quote_balance) { 20_000 }
+
+      let(:expected_limits) do
+        {
+          "5_target_asks_base_limit" => 1,
+          "5_target_bids_quote_limit" => 10_000,
+          "5_source_asks_quote_limit" => 20_000,
+          "5_source_bids_base_limit" => 2
+        }
+      end
+
+      it "for bids" do
+        target_orderbook = strategy.call
+
+        expect(strategy.debug_infos["6_volume_bids_quote"].to_f <= expected_limits["5_target_bids_quote_limit"].to_f).to eq(true)
+        expect(strategy.debug_infos["6_volume_bids_base"].to_f <= expected_limits["5_source_bids_base_limit"].to_f).to eq(true)
+        expect(strategy.debug_infos["5_target_bids_quote_limit"]).to eq(expected_limits["5_target_bids_quote_limit"])
+        expect(strategy.debug_infos["5_source_bids_base_limit"]).to eq(expected_limits["5_source_bids_base_limit"])
+      end
+
+      it "for asks" do
+        target_orderbook = strategy.call
+
+        expect(strategy.debug_infos["6_volume_asks_base"].to_f <= expected_limits["5_target_asks_base_limit"].to_f).to eq(true)
+        expect(strategy.debug_infos["6_volume_asks_quote"].to_f <= expected_limits["5_source_asks_quote_limit"].to_f).to eq(true)
+        expect(strategy.debug_infos["5_target_asks_base_limit"]).to eq(expected_limits["5_target_asks_base_limit"])
+        expect(strategy.debug_infos["5_source_asks_quote_limit"]).to eq(expected_limits["5_source_asks_quote_limit"])
+      end
+    end
+
+    context "for asks and bids with balance on target and source bigger than orderbook volume. Mid price 10_000" do
+      let(:balance_base_perc) { 1 }
+      let(:balance_quote_perc) { 1 }
+      let(:source_base_balance) { 30 }
+      let(:source_quote_balance) { 320_000 }
+      let(:target_base_balance) { 24 }
+      let(:target_quote_balance) { 300_000 }
+
+      let(:expected_limits) do
+        {
+          "5_target_asks_base_limit" => 24,
+          "5_target_bids_quote_limit" => 300_000,
+          "5_source_asks_quote_limit" => 320_000,
+          "5_source_bids_base_limit" => 30
+        }
+      end
+
+      let(:source_orderbook_bids_volume) {
+        sum_base = 0.0.to_d
+        sum_quote = 0.0.to_d
+        orderbook[1].each do |point|
+          sum_base += point[2] if point[2] > 0
+          sum_quote += point[2] * point[1] if point[2] > 0
+        end
+        return sum_base, sum_quote
+      }
+
+      let(:source_orderbook_asks_volume) {
+        sum_base = 0.0.to_d
+        sum_quote = 0.0.to_d
+        orderbook[1].each do |point|
+          sum_base += point[2].abs if point[2] < 0
+          sum_quote += point[2].abs * point[1] if point[2] < 0
+        end
+        return sum_base, sum_quote
+      }
+
+      it "for bids" do
+        target_orderbook = strategy.call
+
+        bids_base, bids_quote = source_orderbook_bids_volume
+        expect(strategy.debug_infos["6_volume_bids_quote"].to_f > bids_quote.to_f).to eq(true)
+        expect(strategy.debug_infos["6_volume_bids_base"].to_f > bids_base.to_f).to eq(true)
+
+        expect(strategy.debug_infos["6_volume_bids_quote"].to_f <= expected_limits["5_target_bids_quote_limit"].to_f).to eq(true)
+        expect(strategy.debug_infos["6_volume_bids_base"].to_f <= expected_limits["5_source_bids_base_limit"].to_f).to eq(true)
+        expect(strategy.debug_infos["5_target_bids_quote_limit"]).to eq(expected_limits["5_target_bids_quote_limit"])
+        expect(strategy.debug_infos["5_source_bids_base_limit"]).to eq(expected_limits["5_source_bids_base_limit"])
+      end
+
+      it "for asks" do
+        target_orderbook = strategy.call
+
+        asks_base, asks_quote = source_orderbook_asks_volume
+        expect(strategy.debug_infos["6_volume_asks_quote"].to_f > asks_quote.to_f).to eq(true)
+        expect(strategy.debug_infos["6_volume_asks_base"].to_f > asks_base.to_f).to eq(true)
+
+        expect(strategy.debug_infos["6_volume_asks_base"].to_f <= expected_limits["5_target_asks_base_limit"].to_f).to eq(true)
+        expect(strategy.debug_infos["6_volume_asks_quote"].to_f <= expected_limits["5_source_asks_quote_limit"].to_f).to eq(true)
+        expect(strategy.debug_infos["5_target_asks_base_limit"]).to eq(expected_limits["5_target_asks_base_limit"])
+        expect(strategy.debug_infos["5_source_asks_quote_limit"]).to eq(expected_limits["5_source_asks_quote_limit"])
+      end
+    end
+
+    context "for asks and bids with quote limit less than balance on target and source. Mid price 10_000" do
+      let(:limit_asks_quote) { 5000 }
+      let(:limit_bids_quote) { 5000 }
+      let(:source_base_balance) { 2 }
+      let(:source_quote_balance) { 10000 }
+      let(:target_base_balance) { 3 }
+      let(:target_quote_balance) { 15000 }
+
+      let(:expected_limits) do
+        {
+          "5_target_asks_base_limit" => 0.5,
+          "5_target_bids_quote_limit" => 5000,
+          "5_source_asks_quote_limit" => 5000,
+          "5_source_bids_base_limit" => 0.5
+        }
+      end
+
+      let(:source_orderbook_bids_volume) {
+        sum_base = 0.0.to_d
+        sum_quote = 0.0.to_d
+        orderbook[1].each do |point|
+          sum_base += point[2] if point[2] > 0
+          sum_quote += point[2] * point[1] if point[2] > 0
+        end
+        return sum_base, sum_quote
+      }
+
+      let(:source_orderbook_asks_volume) {
+        sum_base = 0.0.to_d
+        sum_quote = 0.0.to_d
+        orderbook[1].each do |point|
+          sum_base += point[2].abs if point[2] < 0
+          sum_quote += point[2].abs * point[1] if point[2] < 0
+        end
+        return sum_base, sum_quote
+      }
+
+      it "for bids" do
+        target_orderbook = strategy.call
+
+        bids_base, bids_quote = source_orderbook_bids_volume
+        expect(strategy.debug_infos["6_volume_bids_quote"].to_f < bids_quote.to_f).to eq(true)
+        expect(strategy.debug_infos["6_volume_bids_base"].to_f < bids_base.to_f).to eq(true)
+
+        expect(strategy.debug_infos["6_volume_bids_quote"].to_f <= expected_limits["5_target_bids_quote_limit"].to_f).to eq(true)
+        expect(strategy.debug_infos["6_volume_bids_base"].to_f <= expected_limits["5_source_bids_base_limit"].to_f).to eq(true)
+        expect(strategy.debug_infos["5_target_bids_quote_limit"]).to eq(expected_limits["5_target_bids_quote_limit"])
+        expect(strategy.debug_infos["5_source_bids_base_limit"]).to eq(expected_limits["5_source_bids_base_limit"])
+      end
+
+      it "for asks" do
+        target_orderbook = strategy.call
+
+        asks_base, asks_quote = source_orderbook_asks_volume
+        expect(strategy.debug_infos["6_volume_asks_quote"].to_f < asks_quote.to_f).to eq(true)
+        expect(strategy.debug_infos["6_volume_asks_base"].to_f < asks_base.to_f).to eq(true)
+
+        expect(strategy.debug_infos["6_volume_asks_base"].to_f <= expected_limits["5_target_asks_base_limit"].to_f).to eq(true)
+        expect(strategy.debug_infos["6_volume_asks_quote"].to_f <= expected_limits["5_source_asks_quote_limit"].to_f).to eq(true)
+        expect(strategy.debug_infos["5_target_asks_base_limit"]).to eq(expected_limits["5_target_asks_base_limit"])
+        expect(strategy.debug_infos["5_source_asks_quote_limit"]).to eq(expected_limits["5_source_asks_quote_limit"])
+      end
+    end
+
+    context "for asks and bids with quote limit less than balance on target. Mid price 10_000" do
+      let(:limit_asks_quote) { 10000 }
+      let(:limit_bids_quote) { 10000 }
+      let(:source_base_balance) { 1.5 }
+      let(:source_quote_balance) { 8000 }
+      let(:target_base_balance) { 3 }
+      let(:target_quote_balance) { 15000 }
+
+      let(:expected_limits) do
+        {
+          "5_target_asks_base_limit" => 1,
+          "5_target_bids_quote_limit" => 10000,
+          "5_source_asks_quote_limit" => 8000,
+          "5_source_bids_base_limit" => 1
+        }
+      end
+
+      let(:source_orderbook_bids_volume) {
+        sum_base = 0.0.to_d
+        sum_quote = 0.0.to_d
+        orderbook[1].each do |point|
+          sum_base += point[2] if point[2] > 0
+          sum_quote += point[2] * point[1] if point[2] > 0
+        end
+        return sum_base, sum_quote
+      }
+
+      let(:source_orderbook_asks_volume) {
+        sum_base = 0.0.to_d
+        sum_quote = 0.0.to_d
+        orderbook[1].each do |point|
+          sum_base += point[2].abs if point[2] < 0
+          sum_quote += point[2].abs * point[1] if point[2] < 0
+        end
+        return sum_base, sum_quote
+      }
+
+      it "for bids" do
+        target_orderbook = strategy.call
+
+        bids_base, bids_quote = source_orderbook_bids_volume
+        expect(strategy.debug_infos["6_volume_bids_quote"].to_f < bids_quote.to_f).to eq(true)
+        expect(strategy.debug_infos["6_volume_bids_base"].to_f < bids_base.to_f).to eq(true)
+
+        expect(strategy.debug_infos["6_volume_bids_quote"].to_f <= expected_limits["5_target_bids_quote_limit"].to_f).to eq(true)
+        expect(strategy.debug_infos["6_volume_bids_base"].to_f <= expected_limits["5_source_bids_base_limit"].to_f).to eq(true)
+        expect(strategy.debug_infos["5_target_bids_quote_limit"]).to eq(expected_limits["5_target_bids_quote_limit"])
+        expect(strategy.debug_infos["5_source_bids_base_limit"]).to eq(expected_limits["5_source_bids_base_limit"])
+      end
+
+      it "for asks" do
+        target_orderbook = strategy.call
+
+        asks_base, asks_quote = source_orderbook_asks_volume
+        expect(strategy.debug_infos["6_volume_asks_quote"].to_f < asks_quote.to_f).to eq(true)
+        expect(strategy.debug_infos["6_volume_asks_base"].to_f < asks_base.to_f).to eq(true)
+
+        expect(strategy.debug_infos["6_volume_asks_base"].to_f <= expected_limits["5_target_asks_base_limit"].to_f).to eq(true)
+        expect(strategy.debug_infos["6_volume_asks_quote"].to_f <= expected_limits["5_source_asks_quote_limit"].to_f).to eq(true)
+        expect(strategy.debug_infos["5_target_asks_base_limit"]).to eq(expected_limits["5_target_asks_base_limit"])
+        expect(strategy.debug_infos["5_source_asks_quote_limit"]).to eq(expected_limits["5_source_asks_quote_limit"])
+      end
+    end
+
+    context "for asks and bids with quote limit bigger than balances. Mid price 10_000" do
+      let(:limit_asks_quote) { 30000 }
+      let(:limit_bids_quote) { 30000 }
+      let(:source_base_balance) { 1.5 }
+      let(:source_quote_balance) { 8000 }
+      let(:target_base_balance) { 3 }
+      let(:target_quote_balance) { 15000 }
+
+      let(:expected_limits) do
+        {
+          "5_target_asks_base_limit" => 3,
+          "5_target_bids_quote_limit" => 15000,
+          "5_source_asks_quote_limit" => 8000,
+          "5_source_bids_base_limit" => 1.5
+        }
+      end
+
+      let(:source_orderbook_bids_volume) {
+        sum_base = 0.0.to_d
+        sum_quote = 0.0.to_d
+        orderbook[1].each do |point|
+          sum_base += point[2] if point[2] > 0
+          sum_quote += point[2] * point[1] if point[2] > 0
+        end
+        return sum_base, sum_quote
+      }
+
+      let(:source_orderbook_asks_volume) {
+        sum_base = 0.0.to_d
+        sum_quote = 0.0.to_d
+        orderbook[1].each do |point|
+          sum_base += point[2].abs if point[2] < 0
+          sum_quote += point[2].abs * point[1] if point[2] < 0
+        end
+        return sum_base, sum_quote
+      }
+
+      it "for bids" do
+        target_orderbook = strategy.call
+
+        bids_base, bids_quote = source_orderbook_bids_volume
+
+        expect(strategy.debug_infos["6_volume_bids_quote"].to_f < bids_quote.to_f).to eq(true)
+        expect(strategy.debug_infos["6_volume_bids_base"].to_f < bids_base.to_f).to eq(true)
+
+        expect(strategy.debug_infos["6_volume_bids_quote"].to_f <= expected_limits["5_target_bids_quote_limit"].to_f).to eq(true)
+        expect(strategy.debug_infos["6_volume_bids_base"].to_f <= expected_limits["5_source_bids_base_limit"].to_f).to eq(true)
+        expect(strategy.debug_infos["5_target_bids_quote_limit"]).to eq(expected_limits["5_target_bids_quote_limit"])
+        expect(strategy.debug_infos["5_source_bids_base_limit"]).to eq(expected_limits["5_source_bids_base_limit"])
+      end
+
+      it "for asks" do
+        target_orderbook = strategy.call
+
+        asks_base, asks_quote = source_orderbook_asks_volume
+        expect(strategy.debug_infos["6_volume_asks_quote"].to_f < asks_quote.to_f).to eq(true)
+        expect(strategy.debug_infos["6_volume_asks_base"].to_f < asks_base.to_f).to eq(true)
+
+        expect(strategy.debug_infos["6_volume_asks_base"].to_f <= expected_limits["5_target_asks_base_limit"].to_f).to eq(true)
+        expect(strategy.debug_infos["6_volume_asks_quote"].to_f <= expected_limits["5_source_asks_quote_limit"].to_f).to eq(true)
+        expect(strategy.debug_infos["5_target_asks_base_limit"]).to eq(expected_limits["5_target_asks_base_limit"])
+        expect(strategy.debug_infos["5_source_asks_quote_limit"]).to eq(expected_limits["5_source_asks_quote_limit"])
+      end
     end
   end
 
@@ -88,11 +640,11 @@ describe Arke::Strategy::Orderback do
     it "outputs a target orberbook" do
       expect(target_bids.to_hash).to eq({})
       expect(target_asks.to_hash).to eq(
-        "0.1402573826086956521e3".to_d => "0.6656597259005248e0".to_d,
-        "0.1402688e3".to_d             => "0.28941727213066e-2".to_d,
-        "0.1402789e3".to_d             => "0.28941727213066e-2".to_d,
-        "0.140289e3".to_d              => "0.2417267470176631e0".to_d,
-        "0.1402977264909e3".to_d       => "0.868251816391989e-1".to_d
+        "0.1402573826086956521e3".to_d => "0.228316045822963728137e5".to_d,
+        "0.1402688e3".to_d => "0.992678460099842296e2".to_d,
+        "0.1402789e3".to_d => "0.992678460099842296e2".to_d,
+        "0.140289e3".to_d => "0.82910371322311672223e4".to_d,
+        "0.1402977264909e3".to_d => "0.29780353802995268887e4".to_d,
       )
     end
   end
@@ -101,11 +653,11 @@ describe Arke::Strategy::Orderback do
     let(:side) { "bids" }
     it "outputs a target orberbook" do
       expect(target_bids.to_hash).to eq(
-        "135.9554".to_d => "0.95982849262347e-2".to_d,
-        "135.9652".to_d => "0.527190829074743e-1".to_d,
-        "135.9750".to_d => (1_131_269_161_072_195.to_d * 1e-16),
-        "135.9848".to_d => (1_727_615_249_109_062.to_d * 1e-16),
-        "136.0044".to_d => (11_517_941_911_481_652.to_d * 1e-16)
+        "135.9554".to_d => "0.2196435728585954911e3".to_d,
+        "135.9652".to_d => "0.12064038332490535253e4".to_d,
+        "135.9750".to_d => "0.25887541608969201184e4".to_d,
+        "135.9848".to_d => "0.39534103098163002607e4".to_d,
+        "136.0044".to_d => "0.263572287430314589336e5".to_d
       )
       expect(target_asks.to_hash).to eq({})
     end
@@ -118,18 +670,18 @@ describe Arke::Strategy::Orderback do
 
     it "outputs a target orberbook" do
       expect(target_asks.to_hash).to eq(
-        "0.1402573826086956521e3".to_d => "0.6656597259005248e0".to_d,
-        "0.1402688e3".to_d             => "0.28941727213066e-2".to_d,
-        "0.1402789e3".to_d             => "0.28941727213066e-2".to_d,
-        "0.140289e3".to_d              => "0.2417267470176631e0".to_d,
-        "0.1402977264909e3".to_d       => "0.868251816391989e-1".to_d
+        "0.1402573826086956521e3".to_d => "0.228316045822963728137e5".to_d,
+        "0.1402688e3".to_d             => "0.992678460099842296e2".to_d,
+        "0.1402789e3".to_d             => "0.992678460099842296e2".to_d,
+        "0.140289e3".to_d              => "0.82910371322311672223e4".to_d,
+        "0.1402977264909e3".to_d       => "0.29780353802995268887e4".to_d
       )
       expect(target_bids.to_hash).to eq(
-        "135.9554".to_d => "0.95982849262347e-2".to_d,
-        "135.9652".to_d => "0.527190829074743e-1".to_d,
-        "135.9750".to_d => (1_131_269_161_072_195.to_d * 1e-16),
-        "135.9848".to_d => (1_727_615_249_109_062.to_d * 1e-16),
-        "136.0044".to_d => (11_517_941_911_481_652.to_d * 1e-16)
+        "135.9554".to_d => "0.2196435728585954911e3".to_d,
+        "135.9652".to_d => "0.12064038332490535253e4".to_d,
+        "135.9750".to_d => "0.25887541608969201184e4".to_d,
+        "135.9848".to_d => "0.39534103098163002607e4".to_d,
+        "136.0044".to_d => "0.263572287430314589336e5".to_d
       )
     end
   end
@@ -141,11 +693,11 @@ describe Arke::Strategy::Orderback do
 
     it "outputs a target orberbook" do
       expect(target_asks.to_hash).to eq(
-        "0.1402573826086956521e3".to_d => "0.6656597259005248e0".to_d,
-        "0.1402688e3".to_d             => "0.28941727213066e-2".to_d,
-        "0.1402789e3".to_d             => "0.28941727213066e-2".to_d,
-        "0.140289e3".to_d              => "0.2417267470176631e0".to_d,
-        "0.1402977264909e3".to_d       => "0.868251816391989e-1".to_d
+        "0.1402573826086956521e3".to_d => "0.228316045822963728137e5".to_d,
+        "0.1402688e3".to_d             => "0.992678460099842296e2".to_d,
+        "0.1402789e3".to_d             => "0.992678460099842296e2".to_d,
+        "0.140289e3".to_d              => "0.82910371322311672223e4".to_d,
+        "0.1402977264909e3".to_d       => "0.29780353802995268887e4".to_d
       )
       expect(target_bids.to_hash).to eq({})
     end
@@ -158,11 +710,11 @@ describe Arke::Strategy::Orderback do
 
     it "outputs a target orberbook" do
       expect(target_bids.to_hash).to eq(
-        "135.9554".to_d => "0.95982849262347e-2".to_d,
-        "135.9652".to_d => "0.527190829074743e-1".to_d,
-        "135.9750".to_d => 1_131_269_161_072_195.to_d * 1e-16,
-        "135.9848".to_d => 1_727_615_249_109_062.to_d * 1e-16,
-        "136.0044".to_d => 11_517_941_911_481_652.to_d * 1e-16
+        "135.9554".to_d => "0.2196435728585954911e3".to_d,
+        "135.9652".to_d => "0.12064038332490535253e4".to_d,
+        "135.9750".to_d => "0.25887541608969201184e4".to_d,
+        "135.9848".to_d => "0.39534103098163002607e4".to_d,
+        "136.0044".to_d => "0.263572287430314589336e5".to_d
       )
 
       expect(target_asks.to_hash).to eq({})

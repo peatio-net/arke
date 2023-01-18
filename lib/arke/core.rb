@@ -53,6 +53,8 @@ require "arke/scheduler/smart"
 
 require "arke/plugins/base"
 require "arke/plugins/limit_balance"
+require "arke/plugins/balance_percentage"
+require "arke/plugins/quote_balance"
 
 require "arke/orderbook/base"
 require "arke/orderbook/orderbook"
