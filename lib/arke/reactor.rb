@@ -10,6 +10,7 @@ module Arke
     GRACE_TIME = 3.0
     FETCH_OPEN_ORDERS_PERIOD = 600
     ORDER_COUNT_PERIOD = 30
+    FETCH_MARKETS_VOLUME_PERIOD = 90
 
     def initialize(strategies_configs, accounts_configs, dry_run)
       @dry_run = dry_run
@@ -37,11 +38,11 @@ module Arke
     end
 
     def count_public_trade_volumes(trade)
-      @metrics["24h_market_volume"].observe(1, {"volume": trade.amount*trade.price, "market": trade.market})
+      @metrics["arke_24h_market_volume"].observe(trade.amount * trade.price, {"exchange": trade.exchange, "market": trade.market})
     end
 
     def count_private_trade_volumes(trade, _)
-      @metrics["24h_market_volume"].observe(1, {"volume": trade.volume, "market": trade.market})
+      @metrics["arke_24h_market_volume"].observe(trade.volume, {"exchange": "opendax", "market": trade.market})
     end
 
     def build_market(config, mode)
@@ -90,7 +91,7 @@ module Arke
       strategy
     end
 
-    def run_metrics_server!
+    def create_metrics_server!
       server = ::PrometheusExporter::Server::WebServer.new bind: "0.0.0.0", port: 4242
 
       # wire up a default local client
@@ -100,16 +101,19 @@ module Arke
       ::PrometheusExporter::Instrumentation::Process.start(type:   "arke",
                                                           labels: {ruby_process: "label for all process metrics"})
 
-      @metrics["order_count"] = ::PrometheusExporter::Metric::Gauge.new("order_count",
+      @metrics["arke_order_count"] = ::PrometheusExporter::Metric::Gauge.new("arke_order_count",
                                                                         "count of orders created by Arke for each market and side")
-      @metrics["account_balance"] = ::PrometheusExporter::Metric::Gauge.new("account_balance",
+      @metrics["arke_account_balance"] = ::PrometheusExporter::Metric::Gauge.new("arke_account_balance",
                                                                         "count of balance for each account used by the Arke")
-      @metrics["24h_market_volume"] = ::PrometheusExporter::Metric::Counter.new("24h_market_volume",
+      @metrics["arke_24h_cumulative_market_volume"] = ::PrometheusExporter::Metric::Gauge.new("arke_24h_cumulative_market_volume",
+                                                                          "cumulative volume of the exchange market")
+      @metrics["arke_24h_market_volume"] = ::PrometheusExporter::Metric::Counter.new("arke_24h_market_volume",
                                                                           "sum of the market volume for 24 hours")
 
-      server.collector.register_metric(@metrics["order_count"])
-      server.collector.register_metric(@metrics["account_balance"])
-      server.collector.register_metric(@metrics["24h_market_volume"])
+      server.collector.register_metric(@metrics["arke_order_count"])
+      server.collector.register_metric(@metrics["arke_account_balance"])
+      server.collector.register_metric(@metrics["arke_24h_cumulative_market_volume"])
+      server.collector.register_metric(@metrics["arke_24h_market_volume"])
 
       server
     end
@@ -120,9 +124,14 @@ module Arke
         trap("TERM") { stop }
 
         # Start metrics server
-        server = run_metrics_server!
+        server = create_metrics_server!
 
-        @thr = ::Thread.new { server.start }
+        @thr = ::Thread.new do
+          server.start
+        rescue StandardError => e
+          logger.error "#{e}: #{e.backtrace.join("\n")}"
+          stop
+        end
 
         # Connect Private Web Sockets
         @accounts.each do |_id, account|
@@ -162,10 +171,20 @@ module Arke
           Fiber.new do
             EM::Synchrony.add_periodic_timer(FETCH_OPEN_ORDERS_PERIOD) { fetch_openorders(strategy) }
 
+            EM::Synchrony.add_periodic_timer(FETCH_MARKETS_VOLUME_PERIOD) do
+              strategy.sources.each do |m|
+                if m.account.driver == "binance"
+                  @metrics["arke_24h_cumulative_market_volume"].observe(m.fetch_24h_volume, {"exchange": "binance", "base_currency": m.base, "market":  m.id})
+                else
+                  logger.debug { "ID: #{m.account.driver} DO NOT provide the 'arke_24h_cumulative_market_volume' metric" }
+                end
+              end
+            end
+
             EM::Synchrony.add_periodic_timer(ORDER_COUNT_PERIOD) do
               strategy.sources.each do |m|
-                @metrics["order_count"].observe(m.orderbook[:buy].length, {"side": "buy", "market": m.id})
-                @metrics["order_count"].observe(m.orderbook[:sell].length, {"side": "sell", "market": m.id})
+                @metrics["arke_order_count"].observe(m.orderbook[:buy].length, {"side": "buy", "market": m.id})
+                @metrics["arke_order_count"].observe(m.orderbook[:sell].length, {"side": "sell", "market": m.id})
               end
             end
 
@@ -226,7 +245,7 @@ module Arke
           ex.fetch_balances
           ex.get_balances.each do |bal|
             %w[free locked total].each do |bal_type|
-              @metrics["account_balance"].observe(bal[bal_type],
+              @metrics["arke_account_balance"].observe(bal[bal_type],
                                                   {
                                                     "name":     ex.id,
                                                     "type":     bal_type,
@@ -294,8 +313,9 @@ module Arke
     # Stops workers and strategy execution
     def stop
       puts "Shutting down arke"
-      ::Thread.kill(@thr)
       EM.stop
+      puts "Shutting down Threads"
+      ::Thread.exit
     end
   end
 end

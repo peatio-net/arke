@@ -18,7 +18,6 @@ require "rack"
 require "simplecov"
 require "byebug"
 
-SimpleCov.start "rails"
 require "arke"
 
 def file_fixture(path)

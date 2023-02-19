@@ -24,12 +24,13 @@ module Arke::Strategy
       @spread_asks = params["spread_asks"].to_d
       @side_asks = %w[asks both].include?(@side)
       @side_bids = %w[bids both].include?(@side)
-      @limit_by_source_balance = params["limit_by_source_balance"] ? true : false
 
       @enable_orderback = params["enable_orderback"] ? true : false
       @min_order_back_amount = params["min_order_back_amount"].to_f
       @orderback_grace_time = params["orderback_grace_time"]&.to_f || DEFAULT_ORDERBACK_GRACE_TIME
       @orderback_type = params["orderback_type"] || DEFAULT_ORDERBACK_TYPE
+      @apply_safe_limits_on_source = params["apply_safe_limits_on_source"] ? true : false
+
       logger.info "Initializing #{self.class} strategy with order_back #{@enable_orderback ? 'enabled' : 'disabled'}"
       logger.info "- min order back amount: #{@min_order_back_amount}"
       logger.info "- orderback_grace_time: #{@orderback_grace_time}"
@@ -38,14 +39,8 @@ module Arke::Strategy
       register_callbacks
       @trades = {}
 
-      @plugins = {
-        limit_balance: Arke::Plugin::LimitBalance.new(target.account, target.base, target.quote, params)
-      }
-
+      @plugins = Arke::Plugin::Base.init_limits(target, source, params)
       check_config
-
-      @limit_asks_base_applied = @plugins[:limit_balance].limit_asks_base
-      @limit_bids_base_applied = @plugins[:limit_balance].limit_bids_base
     end
 
     def check_config
@@ -181,54 +176,60 @@ module Arke::Strategy
       assert_currency_found(target.account, target.base)
       assert_currency_found(target.account, target.quote)
 
-      limit = @plugins[:limit_balance].call(source.orderbook)
-      limit_bids_base_applied = limit[:limit_bids_base]
-      limit_asks_base_applied = limit[:limit_asks_base]
-      top_bid_price = limit[:top_bid_price]
-      top_ask_price = limit[:top_ask_price]
+      # Get balance limits for target account
+      target_limit = @plugins[:target_limit].call(source.orderbook)
+      # Get balance limits for source account
+      source_limit = @plugins[:source_limit].call(source.orderbook)
+
+      top_bid_price = target_limit[:top_bid_price]
+      top_ask_price = target_limit[:top_ask_price]
 
       price_points_asks = @side_asks ? price_points(:asks, top_ask_price, @levels_count, @levels_price_func, @levels_price_step) : nil
       price_points_bids = @side_bids ? price_points(:bids, top_bid_price, @levels_count, @levels_price_func, @levels_price_step) : nil
       ob_agg = source.orderbook.aggregate(price_points_bids, price_points_asks, target.min_amount)
       ob = ob_agg.to_ob
 
-      limit_asks_quote = source.account.balance(source.quote)["free"]
-      limit_bids_quote = target.account.balance(target.quote)["total"]
+      # Limits from target account
+      target_asks_base_limit = target_limit[:limit_in_base]
+      target_bids_quote_limit = target_limit[:limit_in_quote]
 
-      source_base_free = source.account.balance(source.base)["free"]
-      target_base_total = target.account.balance(target.base)["total"]
+      # Limits from source account
+      source_asks_quote_limit = source_limit[:limit_in_quote]
+      source_bids_base_limit = source_limit[:limit_in_base]
 
-      if source_base_free < limit_bids_base_applied && @limit_by_source_balance
-        limit_bids_base_applied = source_base_free
-        logger.warn("#{source.base} balance on #{source.account.driver} is #{source_base_free} lower than the limit set to #{limit[:limit_bids_base]}")
-      end
-
-      if target_base_total < limit_asks_base_applied && @limit_by_source_balance
-        limit_asks_base_applied = target_base_total
-        logger.warn("#{target.base} balance on #{target.account.driver} is #{target_base_total} lower than the limit set to #{limit[:limit_asks_base]}")
-      end
-
-      ob_adjusted = ob.adjust_volume(
-        limit_bids_base_applied,
-        limit_asks_base_applied,
-        limit_bids_quote,
-        limit_asks_quote
+      # Adjust volume with target account
+      ob_adjusted = ob.adjust_volume_simple(
+        target_asks_base_limit,
+        target_bids_quote_limit,
       )
+
+      # Adjust volume with source account
+      ob_adjusted = ob_adjusted.adjust_volume_simple(
+        source_bids_base_limit,
+        source_asks_quote_limit,
+        true,
+      ) if @apply_safe_limits_on_source
+
       ob_spread = ob_adjusted.spread(@spread_bids, @spread_asks)
 
       price_points_asks = price_points_asks&.map {|pp| ::Arke::PricePoint.new(apply_spread(:sell, pp.price_point, @spread_asks)) }
       price_points_bids = price_points_bids&.map {|pp| ::Arke::PricePoint.new(apply_spread(:buy, pp.price_point, @spread_bids)) }
 
-      # Save the applied amount for scheduler.
-      @limit_bids_base_applied = limit_bids_base_applied
-      @limit_asks_base_applied = limit_asks_base_applied
-
       push_debug("0_asks_price_points", price_points_asks)
       push_debug("0_bids_price_points", price_points_bids)
       push_debug("1_ob_agg", ob_agg)
       push_debug("2_ob", "\n#{ob}")
-      push_debug("3_ob_adjusted", "\n#{ob_adjusted}")
+      push_debug("3_ob_adjusted", ob_adjusted)
       push_debug("4_ob_spread", "\n#{ob_spread}")
+      push_debug("5_target_asks_base_limit", target_asks_base_limit)
+      push_debug("5_target_bids_quote_limit", target_bids_quote_limit)
+      push_debug("5_source_asks_quote_limit", source_asks_quote_limit)
+      push_debug("5_source_bids_base_limit", source_bids_base_limit)
+      push_debug("6_volume_asks_base", ob_adjusted.volume_asks_base)
+      push_debug("6_volume_asks_quote", ob_adjusted.volume_asks_quote)
+      push_debug("6_volume_bids_base", ob_adjusted.volume_bids_base)
+      push_debug("6_volume_bids_quote", ob_adjusted.volume_bids_quote)
+
 
       [ob_spread, {asks: price_points_asks, bids: price_points_bids}]
     end

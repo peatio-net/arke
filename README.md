@@ -167,17 +167,16 @@ Orders amount are set according to the source orders volume of the same price le
 ##### Orderback strategy
 
 This strategy behaves like the *Copy* strategy and have the ability to order back the liquidity from the source exchange market.
-An soon as an order is matched, the strategy creates an order on the source exchange with the matched amount and the same price without the spread. This way if the spread configured is higher than the exchanges fee the P&L will be positive.
+An soon as an order is matched, the strategy creates an order on the source exchange with the matched amount and the same price without the spread. This way if the spread configured is higher than the exchanges fee the P&L will be positive. If *apply_safe_limits_on_source* is set to true final orderbook will be adjusted using source balance (total amounts for bids orders will be adjusted with source base currency balance, and total volume for asks orders will be adjusted with source quote currency balance)
 
 | Field                   | Description                                                  |
 | ----------------------- | ------------------------------------------------------------ |
 | `spread_bids`           | Spread for bids side (in percentage)                         |
 | `spread_asks`           | Spread for asks side (in percentage)                         |
-| `limit_asks_base`       | Sum of amounts of orders of ask side                         |
-| `limit_bids_base`       | Sum of amounts of orders of bid side                         |
-| `limit_by_source_balance` | Limit bids and asks amount according to the source account balances (default: `false`)|
 | `balance_base_perc`     | Ratio for sum of amounts of orders of ask side based on base currency balance   |
 | `balance_quote_perc`    | Ratio for sum of amounts of orders of bid side based on quote currency balance  |
+| `limit_asks_quote`      | Limit for amounts of orders on ask side in the quote currency |
+| `limit_bids_quote`      | Limit for amounts of orders on bid side in the quote currency |
 | `levels_size`           | Minimum price difference between orders                      |
 | `levels_count`          | Number of orders for each side                               |
 | `levels_price_step`     | Minimum price difference between levels                                         |
@@ -185,6 +184,7 @@ An soon as an order is matched, the strategy creates an order on the source exch
 | `max_amount_per_order`  | Maximum size for one order, if more liquidity is needed for one level several orders of this size will be created |
 | `side`                  | Side where orders will be created (valid: `asks`, `bids`, `both`) |
 | `enable_orderback`      | Flag for enabling orderback, could be: `true` or `false`     |
+| `apply_safe_limits_on_source` | Applies the same limits (percentage or static value) to the source balances. This helps to make sure all orders can be filled from the source in case of many trades would happen at the same time on the target. |
 | `min_order_back_amount` | The amount of the trade must be higher than this value for the order back to be created, otherwise the trade will be ignored. |
 | `orderback_grace_time`  | The time to wait incoming trades before triggering the order back, default 1 sec |
 | `orderback_type`  | The order back type it will be created, could be: `limit` or `market`, default is `market` |
