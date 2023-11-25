@@ -15,6 +15,8 @@ module Arke::Exchange
       @finex_route = config["finex_route"] || "finex"
       @finex = config["finex"] == true
       @ws_base_url = config["ws"] ||= "wss://%s" % [URI.parse(config["host"]).hostname]
+      # Ability to limit Markets list to a specific base_unit Eg ETH in strategy .yml file
+      @single_base_unit = config["single_base_unit"] || nil
 
       @connection = Faraday.new(url: "#{config['host']}/api/v2") do |conn|
         conn.options.timeout = 10
@@ -194,11 +196,22 @@ module Arke::Exchange
     end
 
     def get_market_infos(market)
-      @market_infos ||= @connection.get("#{@finex ? @finex_route : @peatio_route}/public/markets").body
+      # Had a problem where there were too many market records, so added option to filter by base_unit
+      public_markets = "/public/markets"
+
+      if @single_base_unit.length > 1
+        public_markets = "/public/markets?base_unit=#{@single_base_unit}"
+      end
+
+       logger.warn { "Single_base_unit= #{@single_base_unit},  URL Endpoint: #{public_markets}" }
+
+      @market_infos ||= @connection.get("#{@finex ? @finex_route : @peatio_route}#{public_markets}").body
+
       infos = @market_infos&.select {|m| m["id"]&.downcase == market.downcase }&.first
       raise "Market #{market} not found" unless infos
 
       infos
+
     end
 
     def market_config(market)
