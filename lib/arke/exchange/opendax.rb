@@ -199,7 +199,7 @@ module Arke::Exchange
       # Had a problem where there were too many market records, so added option to filter by base_unit
       public_markets = "/public/markets"
 
-      if @single_base_unit.length > 1
+      if !@single_base_unit.nil?
         public_markets = "/public/markets?base_unit=#{@single_base_unit}"
       end
 
