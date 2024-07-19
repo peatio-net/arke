@@ -1,0 +1,41 @@
+# Ignore git
+.git
+.gitignore
+/.git
+/.github
+
+# JetBrains IDE files
+.idea
+
+# Ignore docker
+Dockerfile
+Dockerfile.plugin
+.dockerignore
+*docker-compose*
+
+# Ignore CI related files
+ci
+.travis.yml
+
+# Ignore files for development
+.ruby-version
+.rspec
+
+.DS_Store
+*.md
+*.MD
+docs
+tmp
+log
+.god
+Makefile
+.travis.yml
+LICENSE
+README
+node_modules
+
+# Ignore bundler config
+/.bundle
+
+# Ignore locally installed gems
+/vendor/bundle
