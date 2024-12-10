@@ -146,23 +146,30 @@ module Arke::Exchange
       limit = 1000
       page = 1
       loop do
-        resp = get("#{@peatio_route}/market/orders", market: market.to_s.downcase, limit: limit, page: page, state: "wait")
-        if resp.body.is_a?(Hash) && resp.body["errors"]
-          raise resp.body["errors"].to_s
-        end
-        resp.body&.each do |o|
-          order = Arke::Order.new(o["market"].upcase, o["price"].to_f, o["remaining_volume"].to_f, o["side"].to_sym)
-          order.id = o["id"]
-          orders << order
-        end
+        begin
+          resp = get("#{@peatio_route}/market/orders", market: market.to_s.downcase, limit: limit, page: page, state: "wait")
 
-        raise "ACCOUNT:#{id} Bad response when fetching open orders" if resp.body.nil?
-        break if resp.body.size < limit
-        if page == 10
-          logger.warn "More than #{orders.size} orders in result, stopping"
+          if resp.body.is_a?(Hash) && resp.body["errors"]
+            raise resp.body["errors"].to_s
+          end
+
+          resp.body&.each do |o|
+            order = Arke::Order.new(o["market"].upcase, o["price"].to_f, o["remaining_volume"].to_f, o["side"].to_sym)
+            order.id = o["id"]
+            orders << order
+          end
+
+          raise "ACCOUNT:#{id} Bad response when fetching open orders" if resp.body.nil?
+          break if resp.body.size < limit
+          if page == 10
+            logger.warn "More than #{orders.size} orders in result, stopping"
+            break
+          end
+          page += 1
+        rescue RuntimeError => e
+          logger.error "Error fetching orders: #{e.message}"
           break
         end
-        page += 1
       end
       orders
     end
@@ -273,6 +280,11 @@ module Arke::Exchange
         req.headers = generate_headers
         req.url path, params
       end
+
+      if response.status != 200
+        raise "HTTP Error #{response.status}: #{response.body}"
+      end
+
       response
     end
 
