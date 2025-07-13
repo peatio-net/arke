@@ -5,7 +5,7 @@ type: docker
 
 steps:
   - name: test
-    image: ruby:3.0
+    image: ruby:3.3.5
     commands:
       - apt-get update
       - gem update bundler
