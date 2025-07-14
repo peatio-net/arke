@@ -10,7 +10,7 @@ Gem::Specification.new do |spec|
   spec.email = ["cmeulien@openware.com"]
 
   spec.summary = "Arke trading bot & library"
-  spec.description = ""
+  spec.description = "Arke trading bot & library"
   spec.homepage = "https://www.openware.com"
 
   # Specify which files should be added to the gem when it is released.
@@ -30,6 +30,7 @@ Gem::Specification.new do |spec|
   spec.add_dependency "em-synchrony", "~> 1.0"
   spec.add_dependency "colorize", "~> 0.8.1"
   spec.add_dependency "rack", "~> 2.2"
+  spec.add_dependency 'logger'
 
   ## Exchanges API libraries
   spec.add_dependency "bitx", "~> 0.2.2"
