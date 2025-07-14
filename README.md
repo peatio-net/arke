@@ -302,3 +302,10 @@ Detail of the `fx` section to configure for a strategy:
 | `period`        | seconds | Refresh period in seconds, default: 3600                                       |
 | `https`         | boolean | Enable https communication (default true)                                      |
 
+2. Build Command Optimization
+bash# Build with specific platform and cache
+
+docker build --platform linux/amd64 \
+  --build-arg BUILDKIT_INLINE_CACHE=1 \
+  --cache-from peatiodao/arke:20241210 \
+  -t peatiodao/arke:optimized .

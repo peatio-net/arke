@@ -1,4 +1,4 @@
-FROM ruby:3.3.5
+FROM ruby:3.2.2-slim
 
 ARG UID=1000
 ARG GID=1000
@@ -22,6 +22,11 @@ COPY --chown=app:app Gemfile Gemfile.lock arke.gemspec VERSION $APP_HOME/
 # Install dependencies
 RUN gem install bundler
 RUN bundle install --jobs=$(nproc) --without test development
+
+# Optimized bundler configuration
+RUN bundle config set --local deployment 'true'
+RUN bundle config set --local without 'test development'
+RUN bundle clean --force
 
 # Copy the main application.
 COPY --chown=app:app . $APP_HOME

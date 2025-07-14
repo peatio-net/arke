@@ -39,3 +39,12 @@ node_modules
 
 # Ignore locally installed gems
 /vendor/bundle
+
+# From Claude AI
+README.md
+CHANGELOG.md
+spec/
+test/
+tmp/
+log/
+coverage/
