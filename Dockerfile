@@ -1,4 +1,4 @@
-FROM ruby:3.3.5-slim AS builder
+FROM ruby:3.3.8-slim AS builder
 
 ARG UID=1000
 ARG GID=1000
@@ -55,7 +55,7 @@ RUN rm -rf \
     && find . -name ".DS_Store" -delete
 
 # Production stage - minimal runtime image
-FROM ruby:3.3.5-slim AS production
+FROM ruby:3.3.8-slim AS production
 
 ARG UID=1000
 ARG GID=1000
