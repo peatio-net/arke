@@ -1,4 +1,5 @@
 source "https://rubygems.org"
+
 git_source(:github) { |repo| "https://github.com/#{repo}.git" }
 
 gem "fiddler-rb", "~>0.1.3", git: "https://github.com/genki/fiddler.git"
@@ -24,6 +25,9 @@ group :development, :test do
   gem "mime-types", "~> 3.3"
   gem "em-websocket"
   gem 'simplecov-cobertura'
+  gem "rubocop-performance", "~> 1.19"
+  gem "rubocop-rspec", "~> 2.24"
+  gem "debug", "~> 1.8", platforms: [:mri]
 end
 
 gem "simplecov", require: false, group: :test
