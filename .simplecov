@@ -2,6 +2,13 @@
 
 require 'simplecov-cobertura'
 
+# In .simplecov
+SimpleCov.configure do
+  enable_coverage :branch
+  minimum_coverage 80
+  refuse_coverage_drop
+end if RUBY_VERSION >= "3.3.0"
+
 SimpleCov.formatter = SimpleCov::Formatter::CoberturaFormatter
 
 SimpleCov.start do

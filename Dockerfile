@@ -28,6 +28,16 @@ USER app
 COPY --chown=app:app Gemfile Gemfile.lock arke.gemspec VERSION $APP_HOME/
 
 # Install bundler and gems with optimizations
+#RUN gem install bundler --no-document \
+#    && bundle config set --local deployment 'true' \
+#    && bundle config set --local without 'test development' \
+#    && bundle config set --local silence_root_warning 'true' \
+#    && bundle config set --local jobs $(nproc) \
+#    && bundle install \
+#    && bundle clean --force \
+#    && rm -rf /home/app/.bundle/cache
+
+# Install bundler and gems with optimizations
 RUN gem install bundler --no-document \
     && bundle config set --local deployment 'true' \
     && bundle config set --local without 'test development' \
@@ -36,6 +46,11 @@ RUN gem install bundler --no-document \
     && bundle install \
     && bundle clean --force \
     && rm -rf /home/app/.bundle/cache
+
+
+#    && bundle config set --local retry '3' \
+#    && bundle config set --local timeout '15' \
+#    && bundle config set --local force_ruby_platform 'true' \
 
 # Copy the main application
 COPY --chown=app:app . $APP_HOME
@@ -74,7 +89,9 @@ ENV APP_HOME=/home/app \
     RUBY_GC_MALLOC_LIMIT_MAX=33554432 \
     RUBY_GC_OLDMALLOC_LIMIT=16777216 \
     RUBY_GC_OLDMALLOC_LIMIT_MAX=33554432 \
+    RUBY_YJIT_ENABLE=1 \
     BOOTSNAP_CACHE_DIR=/tmp/bootsnap
+
 
 # Install only runtime dependencies including OpenSSL
 RUN apt-get update && apt-get install -y --no-install-recommends \

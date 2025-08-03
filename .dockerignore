@@ -27,12 +27,14 @@ ci
 docs
 tmp
 log
+*.log
 .god
 Makefile
 .travis.yml
 LICENSE
 README
 node_modules
+node_modules/
 
 # Ignore bundler config
 /.bundle
@@ -48,3 +50,10 @@ test/
 tmp/
 log/
 coverage/
+*.pid
+*.seed
+*.sock
+.nyc_output/
+*.tgz
+.cache/
+.parcel-cache/
